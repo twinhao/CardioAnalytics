@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心電圖可視化系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .controls {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9em;
+        }
+
+        button,
+        select,
+        input[type="range"] {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        select {
+            background: white;
+            border: 2px solid #dee2e6;
+            color: #495057;
+        }
+
+        select:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input[type="range"] {
+            width: 150px;
+            height: 8px;
+            background: #dee2e6;
+            outline: none;
+            border-radius: 4px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-container {
+            padding: 30px;
+            background: white;
+        }
+
+        #ecgChart {
+            width: 100%;
+            height: 600px;
+            border-radius: 15px;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            background: #f8f9fa;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #667eea;
+            border-radius: 50%;
+            border-top: 3px solid transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .stats {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            .stat-card {
+                min-width: 100px;
+                padding: 12px 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🫀 心電圖即時監測系統</h1>
+            <p>3000筆ECG病歷資料檢視系統</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>記錄選擇</label>
+                <select id="recordSelector">
+                    <option value="">載入中...</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>導航控制</label>
+                <div style="display: flex; gap: 10px;">
+                    <button id="prevBtn">◀️ 上一筆</button>
+                    <button id="nextBtn">下一筆 ▶️</button>
+                </div>
+            </div>
+
+
+            <div class="control-group">
+                <label>振幅調整</label>
+                <input type="range" id="amplitudeSlider" min="0.5" max="3" step="0.1" value="1">
+                <span id="amplitudeValue">1.0x</span>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="heartRate">72</div>
+                <div class="stat-label">心跳率 BPM</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="dataCount">載入中...</div>
+                <div class="stat-label">記錄編號</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="diagnosis">正常心律</div>
+                <div class="stat-label">診斷結果</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="signalQuality">良好</div>
+                <div class="stat-label">訊號品質</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <div class="loading" id="loading">正在載入3000筆ECG病歷資料，每筆30秒...</div>
+            <canvas id="ecgChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        class ECGVisualizer {
+            constructor() {
+                this.canvas = document.getElementById('ecgChart');
+                this.ctx = this.canvas.getContext('2d');
+                this.allECGData = []; // 儲存所有3000筆30秒記錄
+                this.currentDataIndex = 0; // 當前顯示的是第幾筆記錄
+                this.sampleRate = 250; // 250 Hz
+                this.recordDuration = 30; // 每筆記錄30秒
+                this.pointsPerRecord = this.sampleRate * this.recordDuration; // 每筆記錄7500個點
+                this.amplitude = 1;
+                this.totalRecords = 3000;
+
+                this.initCanvas();
+                this.loadAllECGData();
+                this.bindEvents();
+                this.draw();
+            }
+
+            initCanvas() {
+                const rect = this.canvas.getBoundingClientRect();
+                this.canvas.width = rect.width * window.devicePixelRatio;
+                this.canvas.height = rect.height * window.devicePixelRatio;
+                this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                this.canvas.style.width = rect.width + 'px';
+                this.canvas.style.height = rect.height + 'px';
+            }
+
+            loadAllECGData() {
+                document.getElementById('loading').style.display = 'block';
+
+                setTimeout(() => {
+                    this.allECGData = [];
+
+                    for (let recordIndex = 0; recordIndex < this.totalRecords; recordIndex++) {
+                        const ecgRecord = [];
+
+                        // 根據真實分佈隨機分配訊號類型
+                        let signalType;
+                        let baseHeartRate;
+                        const rand = Math.random();
+                        if (rand < 0.75) {
+                            signalType = 'normal';
+                            baseHeartRate = 60 + Math.random() * 40; // 60-100 BPM
+                        } else if (rand < 0.88) {
+                            signalType = 'tachycardia';
+                            baseHeartRate = 100 + Math.random() * 50; // 100-150 BPM
+                        } else if (rand < 0.96) {
+                            signalType = 'bradycardia';
+                            baseHeartRate = 40 + Math.random() * 20; // 40-60 BPM
+                        } else {
+                            signalType = 'arrhythmia';
+                            baseHeartRate = 50 + Math.random() * 70; // 50-120 BPM 不規律
+                        }
+
+                        const heartRateVariation = (Math.random() - 0.5) * 10; // ±5 BPM變化
+                        const amplitudeVariation = 0.7 + Math.random() * 0.6; // 0.7-1.3倍振幅變化
+
+                        for (let i = 0; i < this.pointsPerRecord; i++) {
+                            const t = i / this.sampleRate;
+                            let ecgValue = this.generateECGPoint(t, baseHeartRate + heartRateVariation, signalType);
+                            ecgValue *= amplitudeVariation;
+
+                            // 根據訊號類型調整
+                            switch (signalType) {
+                                case 'arrhythmia':
+                                    if (Math.random() < 0.08) {
+                                        ecgValue += (Math.random() - 0.5) * 0.6; // 不規律變化
+                                    }
+                                    break;
+                                case 'tachycardia':
+                                    // 心跳過速可能有些微變形
+                                    ecgValue += (Math.random() - 0.5) * 0.05;
+                                    break;
+                                case 'bradycardia':
+                                    // 心跳過緩可能振幅較小
+                                    ecgValue *= 0.9;
+                                    break;
+                            }
+
+                            // 加入輕微雜訊使其更真實
+                            ecgValue += (Math.random() - 0.5) * 0.03;
+
+                            ecgRecord.push(ecgValue);
+                        }
+
+                        // 計算最終心跳率並分類
+                        const finalHeartRate = Math.round(baseHeartRate + heartRateVariation);
+                        let diagnosis = '正常心律';
+                        if (signalType === 'tachycardia') diagnosis = '心跳過速';
+                        else if (signalType === 'bradycardia') diagnosis = '心跳過緩';
+                        else if (signalType === 'arrhythmia') diagnosis = '心律不整';
+
+                        this.allECGData.push({
+                            data: ecgRecord,
+                            heartRate: finalHeartRate,
+                            diagnosis: diagnosis,
+                            timestamp: new Date(Date.now() - (this.totalRecords - recordIndex) * 30000).toLocaleString(),
+                            quality: Math.random() > 0.15 ? '良好' : '一般' // 15%機率為一般品質
+                        });
+
+                        // 更新進度
+                        if (recordIndex % 100 === 0) {
+                            document.getElementById('dataCount').textContent = `載入中... ${recordIndex}/${this.totalRecords}`;
+                        }
+                    }
+
+                    document.getElementById('loading').style.display = 'none';
+                    this.populateRecordSelector();
+                    this.updateStats();
+                }, 100);
+            }
+
+            populateRecordSelector() {
+                const selector = document.getElementById('recordSelector');
+                selector.innerHTML = '';
+                
+                for (let i = 0; i < this.totalRecords; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    const record = this.allECGData[i];
+                    option.textContent = `記錄 ${i + 1} - ${record.diagnosis} (${record.heartRate} BPM)`;
+                    selector.appendChild(option);
+                }
+                
+                selector.selectedIndex = 0;
+            }
+
+            generateECGPoint(t, heartRate, signalType = 'normal') {
+                // 模擬真實ECG波形：P波、QRS複合波、T波
+                const period = 60 / heartRate; // 一個心跳週期的秒數
+                const phase = (t % period) / period * 2 * Math.PI;
+
+                let ecgValue = 0;
+
+                // P波 (0.08-0.12秒)
+                if (phase >= 0 && phase <= 0.8) {
+                    ecgValue += 0.1 * Math.sin(phase * 4);
+                }
+
+                // QRS複合波 (0.06-0.10秒) - 主要特徵
+                if (phase >= 2.5 && phase <= 3.5) {
+                    const qrsPhase = (phase - 2.5);
+                    if (qrsPhase <= 0.3) {
+                        ecgValue += -0.2 * Math.sin(qrsPhase * 10); // Q波
+                    } else if (qrsPhase <= 0.6) {
+                        ecgValue += 1.0 * Math.sin((qrsPhase - 0.3) * 10); // R波
+                    } else {
+                        ecgValue += -0.3 * Math.sin((qrsPhase - 0.6) * 10); // S波
+                    }
+                }
+
+                // T波 (0.16秒)
+                if (phase >= 4.5 && phase <= 5.5) {
+                    ecgValue += 0.3 * Math.sin((phase - 4.5) * 3);
+                }
+
+                return ecgValue;
+            }
+
+
+            bindEvents() {
+                const recordSelector = document.getElementById('recordSelector');
+                const amplitudeSlider = document.getElementById('amplitudeSlider');
+                const prevBtn = document.getElementById('prevBtn');
+                const nextBtn = document.getElementById('nextBtn');
+
+                recordSelector.addEventListener('change', (e) => {
+                    this.currentDataIndex = parseInt(e.target.value);
+                    this.draw();
+                    this.updateStats();
+                });
+
+                prevBtn.addEventListener('click', () => this.previousRecord());
+                nextBtn.addEventListener('click', () => this.nextRecord());
+
+                amplitudeSlider.addEventListener('input', (e) => {
+                    this.amplitude = parseFloat(e.target.value);
+                    document.getElementById('amplitudeValue').textContent = this.amplitude.toFixed(1) + 'x';
+                    this.draw();
+                });
+
+                // 鍵盤控制
+                document.addEventListener('keydown', (e) => {
+                    switch (e.key) {
+                        case 'ArrowLeft':
+                            this.previousRecord();
+                            break;
+                        case 'ArrowRight':
+                            this.nextRecord();
+                            break;
+                    }
+                });
+
+                window.addEventListener('resize', () => this.initCanvas());
+            }
+
+
+            nextRecord() {
+                if (this.allECGData.length === 0) return;
+                this.currentDataIndex = (this.currentDataIndex + 1) % this.totalRecords;
+                document.getElementById('recordSelector').selectedIndex = this.currentDataIndex;
+                this.draw();
+                this.updateStats();
+            }
+
+            previousRecord() {
+                if (this.allECGData.length === 0) return;
+                this.currentDataIndex = (this.currentDataIndex - 1 + this.totalRecords) % this.totalRecords;
+                document.getElementById('recordSelector').selectedIndex = this.currentDataIndex;
+                this.draw();
+                this.updateStats();
+            }
+
+            draw() {
+                const rect = this.canvas.getBoundingClientRect();
+                const width = rect.width;
+                const height = rect.height;
+
+                // 清空畫布
+                this.ctx.clearRect(0, 0, width, height);
+
+                // 繪製背景網格
+                this.drawGrid(width, height);
+
+                // 繪製ECG波形
+                this.drawECG(width, height);
+            }
+
+            drawGrid(width, height) {
+                this.ctx.strokeStyle = '#e9ecef';
+                this.ctx.lineWidth = 1;
+
+                // 垂直線
+                for (let x = 0; x <= width; x += 25) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, height);
+                    this.ctx.stroke();
+                }
+
+                // 水平線
+                for (let y = 0; y <= height; y += 25) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(width, y);
+                    this.ctx.stroke();
+                }
+
+                // 粗網格線
+                this.ctx.strokeStyle = '#dee2e6';
+                this.ctx.lineWidth = 2;
+
+                for (let x = 0; x <= width; x += 125) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, height);
+                    this.ctx.stroke();
+                }
+
+                for (let y = 0; y <= height; y += 125) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(width, y);
+                    this.ctx.stroke();
+                }
+            }
+
+            drawECG(width, height) {
+                if (this.allECGData.length === 0) return;
+
+                const currentRecord = this.allECGData[this.currentDataIndex];
+                const centerY = height / 2;
+                const scale = height / 6 * this.amplitude;
+
+                this.ctx.strokeStyle = '#28a745';
+                this.ctx.lineWidth = 2;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+
+                this.ctx.beginPath();
+
+                // 顯示完整的30秒記錄
+                for (let i = 0; i < currentRecord.data.length; i++) {
+                    const x = (i / currentRecord.data.length) * width;
+                    const y = centerY - (currentRecord.data[i] * scale);
+
+                    if (i === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                }
+
+                this.ctx.stroke();
+
+                // 顯示記錄資訊
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                this.ctx.fillRect(10, 10, 350, 80);
+                
+                this.ctx.fillStyle = '#495057';
+                this.ctx.font = 'bold 16px Microsoft JhengHei';
+                this.ctx.fillText(`記錄 ${this.currentDataIndex + 1}/${this.totalRecords} - ${currentRecord.diagnosis}`, 20, 30);
+                this.ctx.font = '14px Microsoft JhengHei';
+                this.ctx.fillText(`時間戳記: ${currentRecord.timestamp}`, 20, 50);
+                this.ctx.fillText(`心跳率: ${currentRecord.heartRate} BPM`, 20, 70);
+                this.ctx.fillText(`訊號品質: ${currentRecord.quality}`, 250, 70);
+
+                // 顯示時間軸
+                this.ctx.fillStyle = '#6c757d';
+                this.ctx.font = '12px Microsoft JhengHei';
+                for (let i = 0; i <= 30; i += 5) {
+                    const x = (i / 30) * width;
+                    this.ctx.fillText(`${i}s`, x - 10, height - 5);
+                    
+                    // 繪製時間刻度線
+                    this.ctx.strokeStyle = '#dee2e6';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, height - 30);
+                    this.ctx.lineTo(x, height - 20);
+                    this.ctx.stroke();
+                }
+
+                // 顯示提示
+                this.ctx.fillStyle = 'rgba(102, 126, 234, 0.8)';
+                this.ctx.font = '14px Microsoft JhengHei';
+                this.ctx.fillText('提示: 使用 ← → 或下拉選單切換記錄', width - 250, height - 20);
+            }
+
+            updateStats() {
+                if (this.allECGData.length === 0) return;
+
+                const currentRecord = this.allECGData[this.currentDataIndex];
+                document.getElementById('heartRate').textContent = currentRecord.heartRate;
+                document.getElementById('dataCount').textContent = `${this.currentDataIndex + 1} / ${this.totalRecords}`;
+                document.getElementById('diagnosis').textContent = currentRecord.diagnosis;
+                document.getElementById('signalQuality').textContent = currentRecord.quality;
+            }
+        }
+
+        // 初始化應用程式
+        window.addEventListener('load', () => {
+            new ECGVisualizer();
+        });
+    </script>
+</body>
+
+</html>
