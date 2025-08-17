@@ -368,11 +368,14 @@
                         else if (signalType === 'bradycardia') diagnosis = '心跳過緩';
                         else if (signalType === 'arrhythmia') diagnosis = '心律不整';
 
+                        // 生成符合上班日收案模式的時間戳記
+                        const workdayTimestamp = this.generateWorkdayTimestamp(recordIndex);
+                        
                         this.allECGData.push({
                             data: ecgRecord,
                             heartRate: finalHeartRate,
                             diagnosis: diagnosis,
-                            timestamp: new Date(Date.now() - (this.totalRecords - recordIndex) * 30000).toLocaleString(),
+                            timestamp: workdayTimestamp.toLocaleString(),
                             quality: Math.random() > 0.15 ? '良好' : '一般' // 15%機率為一般品質
                         });
 
@@ -401,6 +404,57 @@
                 }
                 
                 selector.selectedIndex = 0;
+            }
+
+            generateWorkdayTimestamp(recordIndex) {
+                // 設定2025年上半年的日期範圍 (1月1日到6月30日)
+                const startDate = new Date(2025, 0, 1); // 2025年1月1日
+                const endDate = new Date(2025, 5, 30);   // 2025年6月30日
+                
+                // 計算2025年上半年的工作日總數
+                let workdays = [];
+                let currentDate = new Date(startDate);
+                
+                while (currentDate <= endDate) {
+                    const dayOfWeek = currentDate.getDay();
+                    // 只收集工作日 (週一=1 到 週五=5)
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        workdays.push(new Date(currentDate));
+                    }
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                
+                // 將3000筆記錄分散到這些工作日中
+                const totalWorkdays = workdays.length;
+                const recordsPerDay = Math.ceil(this.totalRecords / totalWorkdays);
+                
+                // 計算當前記錄應該在哪一個工作日
+                const dayIndex = Math.floor(recordIndex / recordsPerDay);
+                const adjustedDayIndex = Math.min(dayIndex, totalWorkdays - 1);
+                let targetDate = new Date(workdays[adjustedDayIndex]);
+                
+                // 在工作日的上班時間內隨機分配時間
+                const workStartHour = 8;  // 早上8點開始
+                const workEndHour = 18;   // 下午6點結束
+                
+                // 上班時間內的隨機分佈，偏向上午時段
+                let randomHour;
+                if (Math.random() < 0.6) {
+                    // 60%機率在上午 (8-12點)
+                    randomHour = workStartHour + Math.random() * 4;
+                } else {
+                    // 40%機率在下午 (12-18點)
+                    randomHour = 12 + Math.random() * 6;
+                }
+                
+                const randomMinute = Math.random() * 60;
+                const randomSecond = Math.random() * 60;
+                
+                targetDate.setHours(Math.floor(randomHour));
+                targetDate.setMinutes(Math.floor(randomMinute));
+                targetDate.setSeconds(Math.floor(randomSecond));
+                
+                return targetDate;
             }
 
             generateECGPoint(t, heartRate, signalType = 'normal') {
