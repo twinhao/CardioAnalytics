@@ -223,7 +223,7 @@
     <div class="container">
         <div class="header">
             <h1>🫀 心電圖即時監測系統</h1>
-            <p>3000筆ECG病歷資料檢視系統</p>
+            <p>ECG病歷資料檢視系統</p>
         </div>
 
         <div class="controls">
@@ -270,7 +270,7 @@
         </div>
 
         <div class="chart-container">
-            <div class="loading" id="loading">正在載入3000筆ECG病歷資料，每筆30秒...</div>
+            <div class="loading" id="loading">正在載入ECG病歷資料庫...</div>
             <canvas id="ecgChart"></canvas>
         </div>
     </div>
@@ -378,7 +378,7 @@
 
                         // 更新進度
                         if (recordIndex % 100 === 0) {
-                            document.getElementById('dataCount').textContent = `載入中... ${recordIndex}/${this.totalRecords}`;
+                            document.getElementById('dataCount').textContent = `載入中... ${Math.floor((recordIndex / this.totalRecords) * 100)}%`;
                         }
                     }
 
