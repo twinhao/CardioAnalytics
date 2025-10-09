@@ -1,0 +1,53 @@
+[2025-09-11 11:20:00] 
+UserID: 8f3dcb1a-7a3e-44a7-a5ff-bba1a60c2100 
+Action: LOGIN_SUCCESS 
+Resource: auth 
+TargetID: - 
+Description: 使用者成功登入 
+IP: 203.0.113.42 
+UserAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+
+[2025-09-11 11:25:15] 
+UserID: a2b4c6d8-e1f3-4567-8901-234567890abc 
+Action: DATA_ACCESS 
+Resource: patient_records 
+TargetID: 12345 
+Description: 使用者存取ECG資料 
+IP: 198.51.100.25 
+UserAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+
+[2025-09-12 11:30:42] 
+UserID: f9e8d7c6-b5a4-3210-9876-543210fedcba 
+Action: LOGIN_FAILED 
+Resource: auth 
+TargetID: - 
+Description: 登入失敗 - 密碼錯誤 
+IP: 192.0.2.100 
+UserAgent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36
+
+[2025-09-12 11:35:08] 
+UserID: 1a2b3c4d-5e6f-7890-abcd-ef1234567890 
+Action: ECG_GENERATE 
+Resource: ecg_system 
+TargetID: 67890 
+Description: 生成ECG數據 
+IP: 10.0.0.15 
+UserAgent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15
+
+[2025-09-13 11:40:33] 
+UserID: 9z8y7x6w-5v4u-3t2s-1r0q-p9o8n7m6l5k4 
+Action: LOGOUT 
+Resource: auth 
+TargetID: - 
+Description: 使用者登出系統 
+IP: 172.16.0.50 
+UserAgent: Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15
+
+[2025-09-13 11:45:19] 
+UserID: 5k4j3h2g-1f0e-d9c8-b7a6-543210987654 
+Action: FILE_UPLOAD 
+Resource: documents 
+TargetID: 11111 
+Description: 上傳醫療檔案 
+IP: 203.0.113.156 
+UserAgent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101
