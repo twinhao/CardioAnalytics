@@ -232,7 +232,7 @@
 
         <div class="controls">
             <div class="control-group">
-                <label>記錄選擇</label>
+                <label for="recordSelector">記錄選擇</label>
                 <select id="recordSelector">
                     <option value="">載入中...</option>
                 </select>
@@ -248,7 +248,7 @@
 
 
             <div class="control-group">
-                <label>振幅調整</label>
+                <label for="amplitudeSlider">振幅調整</label>
                 <input type="range" id="amplitudeSlider" min="0.5" max="3" step="0.1" value="1">
                 <span id="amplitudeValue">1.0x</span>
             </div>
@@ -314,85 +314,105 @@
                     this.allECGData = [];
 
                     for (let recordIndex = 0; recordIndex < this.totalRecords; recordIndex++) {
-                        const ecgRecord = [];
-
-                        // 根據真實分佈隨機分配訊號類型
-                        let signalType;
-                        let baseHeartRate;
-                        const rand = Math.random();
-                        if (rand < 0.75) {
-                            signalType = 'normal';
-                            baseHeartRate = 60 + Math.random() * 40; // 60-100 BPM
-                        } else if (rand < 0.88) {
-                            signalType = 'tachycardia';
-                            baseHeartRate = 100 + Math.random() * 50; // 100-150 BPM
-                        } else if (rand < 0.96) {
-                            signalType = 'bradycardia';
-                            baseHeartRate = 40 + Math.random() * 20; // 40-60 BPM
-                        } else {
-                            signalType = 'arrhythmia';
-                            baseHeartRate = 50 + Math.random() * 70; // 50-120 BPM 不規律
-                        }
-
-                        const heartRateVariation = (Math.random() - 0.5) * 10; // ±5 BPM變化
-                        const amplitudeVariation = 0.7 + Math.random() * 0.6; // 0.7-1.3倍振幅變化
-
-                        for (let i = 0; i < this.pointsPerRecord; i++) {
-                            const t = i / this.sampleRate;
-                            let ecgValue = this.generateECGPoint(t, baseHeartRate + heartRateVariation, signalType);
-                            ecgValue *= amplitudeVariation;
-
-                            // 根據訊號類型調整
-                            switch (signalType) {
-                                case 'arrhythmia':
-                                    if (Math.random() < 0.08) {
-                                        ecgValue += (Math.random() - 0.5) * 0.6; // 不規律變化
-                                    }
-                                    break;
-                                case 'tachycardia':
-                                    // 心跳過速可能有些微變形
-                                    ecgValue += (Math.random() - 0.5) * 0.05;
-                                    break;
-                                case 'bradycardia':
-                                    // 心跳過緩可能振幅較小
-                                    ecgValue *= 0.9;
-                                    break;
-                            }
-
-                            // 加入輕微雜訊使其更真實
-                            ecgValue += (Math.random() - 0.5) * 0.03;
-
-                            ecgRecord.push(ecgValue);
-                        }
-
-                        // 計算最終心跳率並分類
-                        const finalHeartRate = Math.round(baseHeartRate + heartRateVariation);
-                        let diagnosis = '正常心律';
-                        if (signalType === 'tachycardia') diagnosis = '心跳過速';
-                        else if (signalType === 'bradycardia') diagnosis = '心跳過緩';
-                        else if (signalType === 'arrhythmia') diagnosis = '心律不整';
-
-                        // 生成符合上班日收案模式的時間戳記
-                        const workdayTimestamp = this.generateWorkdayTimestamp(recordIndex);
-                        
-                        this.allECGData.push({
-                            data: ecgRecord,
-                            heartRate: finalHeartRate,
-                            diagnosis: diagnosis,
-                            timestamp: workdayTimestamp.toLocaleString(),
-                            quality: Math.random() > 0.15 ? '良好' : '一般' // 15%機率為一般品質
-                        });
-
-                        // 更新進度
-                        if (recordIndex % 100 === 0) {
-                            document.getElementById('dataCount').textContent = `載入中... ${Math.floor((recordIndex / this.totalRecords) * 100)}%`;
-                        }
+                        const record = this.generateSingleRecord(recordIndex);
+                        this.allECGData.push(record);
+                        this.updateLoadingProgress(recordIndex);
                     }
 
-                    document.getElementById('loading').style.display = 'none';
-                    this.populateRecordSelector();
-                    this.updateStats();
+                    this.finishLoading();
                 }, 100);
+            }
+
+            generateSingleRecord(recordIndex) {
+                const { signalType, baseHeartRate } = this.determineSignalType();
+                const heartRateVariation = (Math.random() - 0.5) * 10;
+                const amplitudeVariation = 0.7 + Math.random() * 0.6;
+
+                const ecgRecord = this.generateECGRecord(
+                    baseHeartRate,
+                    heartRateVariation,
+                    amplitudeVariation,
+                    signalType
+                );
+
+                const finalHeartRate = Math.round(baseHeartRate + heartRateVariation);
+                const diagnosis = this.getDiagnosis(signalType);
+                const workdayTimestamp = this.generateWorkdayTimestamp(recordIndex);
+
+                return {
+                    data: ecgRecord,
+                    heartRate: finalHeartRate,
+                    diagnosis: diagnosis,
+                    timestamp: workdayTimestamp.toLocaleString(),
+                    quality: Math.random() > 0.15 ? '良好' : '一般'
+                };
+            }
+
+            determineSignalType() {
+                const rand = Math.random();
+                if (rand < 0.75) {
+                    return { signalType: 'normal', baseHeartRate: 60 + Math.random() * 40 };
+                } else if (rand < 0.88) {
+                    return { signalType: 'tachycardia', baseHeartRate: 100 + Math.random() * 50 };
+                } else if (rand < 0.96) {
+                    return { signalType: 'bradycardia', baseHeartRate: 40 + Math.random() * 20 };
+                } else {
+                    return { signalType: 'arrhythmia', baseHeartRate: 50 + Math.random() * 70 };
+                }
+            }
+
+            generateECGRecord(baseHeartRate, heartRateVariation, amplitudeVariation, signalType) {
+                const ecgRecord = [];
+
+                for (let i = 0; i < this.pointsPerRecord; i++) {
+                    const t = i / this.sampleRate;
+                    let ecgValue = this.generateECGPoint(t, baseHeartRate + heartRateVariation, signalType);
+                    ecgValue *= amplitudeVariation;
+                    ecgValue = this.applySignalTypeAdjustment(ecgValue, signalType);
+                    ecgValue += (Math.random() - 0.5) * 0.03; // 加入輕微雜訊
+                    ecgRecord.push(ecgValue);
+                }
+
+                return ecgRecord;
+            }
+
+            applySignalTypeAdjustment(ecgValue, signalType) {
+                switch (signalType) {
+                    case 'arrhythmia':
+                        if (Math.random() < 0.08) {
+                            return ecgValue + (Math.random() - 0.5) * 0.6;
+                        }
+                        break;
+                    case 'tachycardia':
+                        return ecgValue + (Math.random() - 0.5) * 0.05;
+                    case 'bradycardia':
+                        return ecgValue * 0.9;
+                }
+                return ecgValue;
+            }
+
+            getDiagnosis(signalType) {
+                const diagnosisMap = {
+                    'normal': '正常心律',
+                    'tachycardia': '心跳過速',
+                    'bradycardia': '心跳過緩',
+                    'arrhythmia': '心律不整'
+                };
+                return diagnosisMap[signalType] || '正常心律';
+            }
+
+            updateLoadingProgress(recordIndex) {
+                if (recordIndex % 100 === 0) {
+                    const progress = Math.floor((recordIndex / this.totalRecords) * 100);
+                    document.getElementById('dataCount').textContent = `載入中... ${progress}%`;
+                }
+            }
+
+            finishLoading() {
+                document.getElementById('loading').style.display = 'none';
+                this.populateRecordSelector();
+                this.updateStats();
+                this.draw();
             }
 
             populateRecordSelector() {
@@ -439,8 +459,7 @@
                 
                 // 在工作日的上班時間內隨機分配時間
                 const workStartHour = 8;  // 早上8點開始
-                const workEndHour = 18;   // 下午6點結束
-                
+
                 // 上班時間內的隨機分佈，偏向上午時段
                 let randomHour;
                 if (Math.random() < 0.6) {
