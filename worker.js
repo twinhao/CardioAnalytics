@@ -64,41 +64,50 @@ const SECURITY_HEADERS = {
   'Server': 'Cloudflare Workers',
 };
 
-// 安全路徑驗證：使用白名單 + 簡單規則（更簡潔的方法）
-// 只允許合法的路徑模式，直接拒絕所有可疑請求
+// 安全路徑驗證：嚴格白名單策略
+// 只允許實際存在的檔案，其他一律返回 404
 
 /**
- * 檢查路徑是否合法
+ * 允許的檔案白名單（實際存在於 public/ 目錄的檔案）
+ */
+const ALLOWED_FILES = new Set([
+  '/',              // 根路徑（映射到 index.html）
+  '/index.html',
+  '/404.html',
+  '/500.html',
+  '/app.js',
+  '/styles.css',
+  '/favicon.svg',
+  '/favicon.ico',   // 特殊處理的檔案
+  '/robots.txt',    // 可能會添加的檔案
+]);
+
+/**
+ * 檢查路徑是否在白名單中
  * @param {string} pathname - URL 路徑
- * @returns {boolean} - true 表示合法，false 表示應該阻擋
+ * @returns {boolean} - true 表示允許，false 表示阻擋
  */
 function isValidPath(pathname) {
-  // 規則 1：只允許根路徑 /
-  if (pathname === '/') return true;
+  // 直接檢查白名單
+  if (ALLOWED_FILES.has(pathname)) {
+    return true;
+  }
 
-  // 規則 2：阻擋任何帶 trailing slash 的路徑（防止目錄列表）
-  if (pathname.endsWith('/')) return false;
-
-  // 規則 3：阻擋明顯可疑的模式
-  const suspiciousPatterns = [
-    /\.\./,              // 路徑遍歷 (../)
-    /\/\./,              // 隱藏檔案 (/.)
-    /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|htm|000)/i,  // 敏感副檔名（任何位置）
-    /^\/[^\/]*\.(php|asp|asa|jsp|cgi)/i,  // 後端腳本
-    /(admin|login|wp-|phpmyadmin|servlet|cgi-bin|usage_\d)/i,  // 常見攻擊目標
+  // 額外的安全檢查：阻擋明顯的攻擊模式（即使不在白名單中）
+  const maliciousPatterns = [
+    /\.\./,              // 路徑遍歷
+    /\/\./,              // 隱藏檔案
+    /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|htm|000|asa|php|asp|jsp|cgi)/i,
+    /(admin|login|wp-|phpmyadmin|servlet|cgi-bin|usage)/i,
   ];
 
-  // 如果匹配任何可疑模式，拒絕
-  if (suspiciousPatterns.some(pattern => pattern.test(pathname))) {
+  // 如果匹配惡意模式，直接拒絕（避免進入錯誤處理）
+  if (maliciousPatterns.some(pattern => pattern.test(pathname))) {
     return false;
   }
 
-  // 規則 4：只允許合理的檔案名格式
-  // 允許：單層路徑，檔名包含字母、數字、底線、連字號、點
-  // 不允許：多層路徑 (如 /admin/login.php)
-  const validFormat = /^\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-
-  return validFormat.test(pathname);
+  // 不在白名單中，也返回 false（會導致 404）
+  return false;
 }
 
 // 快取控制標頭
