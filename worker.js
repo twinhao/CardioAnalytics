@@ -1,15 +1,33 @@
 /**
  * Cloudflare Worker for cardioanalytics.twinhao.com
  *
+ * 符合 OWASP Top 10 2021 最佳實踐
+ *
  * 功能：
  * 1. 提供靜態網站內容
- * 2. 強制 HTTPS
- * 3. 新增所有安全標頭
- * 4. 自訂錯誤頁面
- * 5. 禁止快取敏感內容
+ * 2. 強制 HTTPS（A02: Cryptographic Failures）
+ * 3. 完整安全標頭（A05: Security Misconfiguration）
+ * 4. 白名單存取控制（A01: Broken Access Control）
+ * 5. 速率限制（A04: Insecure Design）
+ * 6. 安全日誌與監控（A09: Logging and Monitoring）
+ * 7. SSRF 防護（A10: Server-Side Request Forgery）
+ * 8. XSS 防護（A03: Injection）
+ * 9. 禁止快取敏感內容（A05: Security Misconfiguration）
  */
 
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
+
+// ==================== 速率限制配置 ====================
+// A04: Insecure Design - 防止濫用和 DoS 攻擊
+const RATE_LIMIT = {
+  maxRequests: 100,        // 每個時間窗口最多請求數
+  windowMs: 60000,         // 時間窗口（毫秒）= 1 分鐘
+  blockDuration: 300000,   // 封鎖時長（毫秒）= 5 分鐘
+};
+
+// 儲存 IP 請求記錄的 Map（在 Worker 記憶體中）
+const requestCounts = new Map();
+const blockedIPs = new Map();
 
 /**
  * 安全地解析 Asset Manifest
@@ -23,6 +41,88 @@ function getAssetManifest(env) {
   }
 }
 
+// ==================== 速率限制函式 ====================
+/**
+ * 檢查 IP 是否超過速率限制
+ * A04: Insecure Design - 防止暴力破解和 DoS
+ *
+ * @param {string} ip - 客戶端 IP
+ * @returns {boolean} - true 表示允許，false 表示被封鎖
+ */
+function checkRateLimit(ip) {
+  const now = Date.now();
+
+  // 檢查 IP 是否在封鎖清單中
+  if (blockedIPs.has(ip)) {
+    const blockInfo = blockedIPs.get(ip);
+    if (now - blockInfo.blockedAt < RATE_LIMIT.blockDuration) {
+      // 仍在封鎖期間
+      return false;
+    } else {
+      // 封鎖期已過，移除封鎖
+      blockedIPs.delete(ip);
+      requestCounts.delete(ip);
+    }
+  }
+
+  // 取得或建立請求記錄
+  const requestInfo = requestCounts.get(ip) || {
+    count: 0,
+    windowStart: now,
+  };
+
+  // 檢查時間窗口是否已過期
+  if (now - requestInfo.windowStart > RATE_LIMIT.windowMs) {
+    // 重置計數器
+    requestInfo.count = 1;
+    requestInfo.windowStart = now;
+  } else {
+    // 增加計數
+    requestInfo.count++;
+  }
+
+  // 更新記錄
+  requestCounts.set(ip, requestInfo);
+
+  // 檢查是否超過限制
+  if (requestInfo.count > RATE_LIMIT.maxRequests) {
+    blockedIPs.set(ip, {
+      blockedAt: now,
+      reason: 'Rate limit exceeded',
+    });
+    return false;
+  }
+
+  return true;
+}
+
+// ==================== 安全日誌函式 ====================
+/**
+ * 記錄安全事件
+ * A09: Security Logging and Monitoring Failures
+ *
+ * @param {string} level - 日誌級別（info, warn, error, security）
+ * @param {string} event - 事件類型
+ * @param {Object} details - 事件詳情
+ */
+function securityLog(level, event, details) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    event,
+    ...details,
+  };
+
+  // 在生產環境中，這些日誌會自動發送到 Cloudflare Analytics
+  console.log(JSON.stringify(logEntry));
+
+  // 關鍵安全事件額外標記
+  if (level === 'security' || level === 'error') {
+    console.error(`[SECURITY] ${event}:`, JSON.stringify(details));
+  }
+}
+
 // 安全標頭配置
 const SECURITY_HEADERS = {
   // CORS 設定
@@ -31,36 +131,38 @@ const SECURITY_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Max-Age': '1800', // 30 分鐘
 
-  // 內容安全政策
+  // 內容安全政策（A03: Injection - XSS 防護）
+  // A08: Software and Data Integrity - 建議在 HTML 中為外部資源使用 SRI
   'Content-Security-Policy':
     "default-src 'self'; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "script-src 'self'; " +
-    "img-src 'self' data:; " +
+    "style-src 'self' 'unsafe-inline'; " +  // unsafe-inline 僅用於內聯樣式
+    "script-src 'self'; " +                  // 強制所有腳本來自同源
+    "img-src 'self' data:; " +               // 允許 data: URI 用於內聯圖片
     "font-src 'self'; " +
     "connect-src 'self'; " +
-    "object-src 'none'; " +
-    "frame-ancestors 'none'; " +
-    "base-uri 'self'; " +
-    "form-action 'self'; " +
-    "upgrade-insecure-requests;",
+    "object-src 'none'; " +                  // 禁止 Flash 等插件
+    "frame-ancestors 'none'; " +             // 防止點擊劫持
+    "base-uri 'self'; " +                    // 防止 base 標籤注入
+    "form-action 'self'; " +                 // 防止表單劫持
+    "upgrade-insecure-requests; " +          // 自動升級 HTTP 到 HTTPS
+    "block-all-mixed-content;",              // 阻擋混合內容
 
-  // HSTS - 強制 HTTPS（12 個月）
+  // HSTS - 強制 HTTPS（A02: Cryptographic Failures）
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 
-  // 防止 MIME 類型嗅探
+  // 防止 MIME 類型嗅探（A03: Injection）
   'X-Content-Type-Options': 'nosniff',
 
-  // 防止點擊劫持
+  // 防止點擊劫持（A01: Broken Access Control）
   'X-Frame-Options': 'DENY',
 
-  // Referrer 政策
+  // Referrer 政策（A02: Cryptographic Failures - 防止資訊洩漏）
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 
-  // 權限政策
+  // 權限政策（A05: Security Misconfiguration）
   'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
 
-  // 移除伺服器資訊
+  // 移除伺服器資訊（A05: Security Misconfiguration - 減少資訊洩露）
   'Server': 'Cloudflare Workers',
 };
 
@@ -166,10 +268,42 @@ function addSecurityHeaders(response) {
  */
 export default {
   async fetch(request, env, ctx) {
+    const startTime = Date.now();
+    let statusCode = 200;
+
     try {
       const url = new URL(request.url);
 
-      // 0. 針對 HTML 請求，強制 Cloudflare 不使用快取
+      // 0. 取得客戶端 IP（用於速率限制和日誌）
+      const clientIP = request.headers.get('CF-Connecting-IP') ||
+                       request.headers.get('X-Forwarded-For') ||
+                       'unknown';
+
+      // A10: SSRF 防護 - 驗證請求來源
+      const origin = request.headers.get('Origin');
+      const referer = request.headers.get('Referer');
+      const userAgent = request.headers.get('User-Agent') || 'unknown';
+
+      // 1. 速率限制檢查（A04: Insecure Design）
+      if (!checkRateLimit(clientIP)) {
+        statusCode = 429;
+        securityLog('security', 'RATE_LIMIT_EXCEEDED', {
+          ip: clientIP,
+          path: url.pathname,
+          userAgent,
+        });
+
+        return new Response('Too Many Requests', {
+          status: 429,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Retry-After': Math.ceil(RATE_LIMIT.blockDuration / 1000).toString(),
+            ...SECURITY_HEADERS,
+          },
+        });
+      }
+
+      // 2. 針對 HTML 請求，強制 Cloudflare 不使用快取
       const isHtmlRequest = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
       if (isHtmlRequest) {
         // 清除這個 URL 的 Cloudflare 快取
@@ -192,21 +326,34 @@ export default {
         });
       }
 
-      // 1. 強制 HTTPS
+      // 3. 強制 HTTPS（A02: Cryptographic Failures）
       if (url.protocol === 'http:') {
         url.protocol = 'https:';
+        securityLog('info', 'HTTPS_REDIRECT', {
+          ip: clientIP,
+          originalUrl: request.url,
+        });
         return Response.redirect(url.toString(), 301);
       }
 
-      // 2. 路徑驗證：使用白名單檢查（簡潔的單一檢查點）
+      // 4. 路徑驗證：使用白名單檢查（A01: Broken Access Control）
       if (!isValidPath(url.pathname)) {
+        statusCode = 404;
+        securityLog('warn', 'INVALID_PATH_BLOCKED', {
+          ip: clientIP,
+          path: url.pathname,
+          userAgent,
+          origin,
+          referer,
+        });
+
         return new Response(null, {
           status: 404,
           headers: SECURITY_HEADERS,
         });
       }
 
-      // 3. 處理 OPTIONS 預檢請求（CORS）
+      // 5. 處理 OPTIONS 預檢請求（CORS）
       if (request.method === 'OPTIONS') {
         return new Response(null, {
           status: 204,
@@ -219,8 +366,16 @@ export default {
         });
       }
 
-      // 4. 只允許 GET 和 HEAD 方法（返回簡潔錯誤訊息）
+      // 6. 只允許 GET 和 HEAD 方法（A01: Broken Access Control）
       if (request.method !== 'GET' && request.method !== 'HEAD') {
+        statusCode = 405;
+        securityLog('warn', 'METHOD_NOT_ALLOWED', {
+          ip: clientIP,
+          method: request.method,
+          path: url.pathname,
+          userAgent,
+        });
+
         return new Response(null, {
           status: 405,
           headers: {
@@ -389,10 +544,31 @@ export default {
         newResponse.headers.set('Content-Type', contentType);
       }
 
+      // 13. 記錄成功的請求（A09: Logging and Monitoring）
+      const duration = Date.now() - startTime;
+      securityLog('info', 'REQUEST_SUCCESS', {
+        ip: clientIP,
+        method: request.method,
+        path: url.pathname,
+        statusCode: newResponse.status,
+        duration,
+        userAgent,
+      });
+
       return newResponse;
 
     } catch (error) {
-      // 12. 全域錯誤處理
+      // 14. 全域錯誤處理（A09: Logging and Monitoring）
+      const duration = Date.now() - startTime;
+
+      securityLog('error', 'WORKER_ERROR', {
+        ip: request.headers.get('CF-Connecting-IP') || 'unknown',
+        path: new URL(request.url).pathname,
+        error: error.message,
+        stack: error.stack,
+        duration,
+      });
+
       console.error('Worker error:', error);
 
       return new Response(

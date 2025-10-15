@@ -21,3 +21,7 @@ directory = "./public"
 [vars]
 ENVIRONMENT = "production"
 
+
+[[routes]]
+pattern = "cardioanalytics.twinhao.com"
+custom_domain = true
