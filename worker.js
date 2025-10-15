@@ -133,18 +133,22 @@ const SECURITY_HEADERS = {
 
   // 內容安全政策（A03: Injection - XSS 防護）
   // A08: Software and Data Integrity - 建議在 HTML 中為外部資源使用 SRI
-  // 移除 unsafe-inline，使用更安全的策略
+  // 使用最嚴格的 CSP 策略：default-src 'none' + 明確白名單
   'Content-Security-Policy':
-    "default-src 'self'; " +
-    "style-src 'self'; " +                   // 移除 unsafe-inline，只允許同源樣式
-    "script-src 'self'; " +                  // 強制所有腳本來自同源
-    "img-src 'self' data:; " +               // 允許 data: URI 用於內聯圖片
-    "font-src 'self'; " +
-    "connect-src 'self'; " +
-    "object-src 'none'; " +                  // 禁止 Flash 等插件
-    "frame-ancestors 'none'; " +             // 防止點擊劫持
+    "default-src 'none'; " +                 // 預設拒絕所有，採用白名單策略
+    "script-src 'self'; " +                  // 只允許同源腳本
+    "style-src 'self'; " +                   // 只允許同源樣式
+    "img-src 'self' data:; " +               // 圖片：同源 + data: URI（Base64 圖片）
+    "font-src 'self'; " +                    // 只允許同源字體
+    "connect-src 'self'; " +                 // AJAX/WebSocket 只允許同源
+    "media-src 'self'; " +                   // 音訊/視訊只允許同源
+    "object-src 'none'; " +                  // 禁止 Flash/Java 等插件
+    "frame-src 'none'; " +                   // 禁止 iframe
+    "frame-ancestors 'none'; " +             // 防止被嵌入 iframe（點擊劫持）
     "base-uri 'self'; " +                    // 防止 base 標籤注入
-    "form-action 'self'; " +                 // 防止表單劫持
+    "form-action 'self'; " +                 // 表單提交只允許同源
+    "manifest-src 'self'; " +                // PWA manifest 只允許同源
+    "worker-src 'self'; " +                  // Web Worker 只允許同源
     "upgrade-insecure-requests; " +          // 自動升級 HTTP 到 HTTPS
     "block-all-mixed-content;",              // 阻擋混合內容
 
