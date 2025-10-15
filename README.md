@@ -24,6 +24,7 @@
 | 類別 | 技術 |
 |------|------|
 | 前端 | HTML5 + CSS3 + Vanilla JavaScript |
+| 執行環境 | Bun 1.0+ / Node.js 18+ |
 | 部署平台 | Cloudflare Workers |
 | CDN | Cloudflare Global Network (310+ 城市) |
 | CI/CD | GitHub Actions |
@@ -56,10 +57,18 @@ fake-ecg/
 
 ### 前置需求
 
-- Node.js 18+
-- npm 或 yarn
+- **Bun 1.0+** (推薦) 或 Node.js 18+
 - Cloudflare 帳號（免費即可）
 - Git
+
+**安裝 Bun：**
+```bash
+# macOS / Linux
+curl -fsSL https://bun.sh/install | bash
+
+# 或使用 Homebrew
+brew install bun
+```
 
 ### 本地開發
 
@@ -69,13 +78,13 @@ git clone https://github.com/twinhao/fake-ecg.git
 cd fake-ecg
 
 # 2. 安裝依賴
-npm install
+bun install
 
 # 3. 登入 Cloudflare
-npx wrangler login
+bunx wrangler login
 
 # 4. 啟動本地開發伺服器
-npm run dev
+bun run dev
 
 # 5. 開啟瀏覽器訪問
 # http://localhost:8787
@@ -84,8 +93,8 @@ npm run dev
 ### 手動部署
 
 ```bash
-# 方法 1：使用 npm script
-npm run deploy
+# 方法 1：使用 bun
+bun run deploy
 
 # 方法 2：使用一鍵部署腳本（推薦）
 bash deploy.sh
@@ -186,16 +195,19 @@ Access-Control-Max-Age: 1800
 
 ```bash
 # 本地開發（熱重載）
-npm run dev
+bun run dev
 
 # 部署到 Cloudflare Workers
-npm run deploy
+bun run deploy
 
 # 查看即時日誌（監控 Worker 執行）
-npm run tail
+bun run tail
 
 # 本地測試（模擬 Worker 環境）
-npm test
+bun test
+
+# 清理依賴重新安裝
+bun run clean && bun install
 ```
 
 ---

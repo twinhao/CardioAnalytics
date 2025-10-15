@@ -45,13 +45,19 @@ git push origin main
 ### 方式 B：本地手動部署
 
 ```bash
-# 1. 登入 Cloudflare（首次）
-npx wrangler login
+# 1. 安裝 Bun（推薦，更快）
+curl -fsSL https://bun.sh/install | bash
 
-# 2. 部署
-npm run deploy
+# 2. 安裝依賴
+bun install
 
-# 或使用腳本
+# 3. 登入 Cloudflare（首次）
+bunx wrangler login
+
+# 4. 部署
+bun run deploy
+
+# 或使用一鍵部署腳本（會自動檢測 Bun/npm）
 bash deploy.sh
 ```
 
@@ -117,6 +123,10 @@ openssl s_client -connect cardioanalytics.twinhao.com:443 -tls1_2
 
 **A:** 即時監控 Worker 日誌：
 ```bash
+# 使用 Bun
+bun run tail
+
+# 或使用 npm
 npm run tail
 ```
 

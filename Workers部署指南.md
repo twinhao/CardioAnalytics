@@ -54,14 +54,24 @@ fake-ecg/
 
 ## 🚀 部署步驟
 
-### 步驟 1：安裝 Wrangler CLI
+### 步驟 1：安裝 Bun 和依賴
 
+**安裝 Bun（推薦）：**
 ```bash
-# 使用 npm 安裝
-npm install
+# macOS / Linux
+curl -fsSL https://bun.sh/install | bash
 
-# 或全域安裝 wrangler
-npm install -g wrangler
+# 或使用 Homebrew
+brew install bun
+```
+
+**安裝專案依賴：**
+```bash
+# 使用 Bun（推薦，更快）
+bun install
+
+# 或使用 npm
+npm install
 ```
 
 ### 步驟 2：登入 Cloudflare
@@ -83,10 +93,13 @@ account_id = "562f1caaf716714f4913ae40a1772c76"  # ✅ 已填入
 ### 步驟 4：本地測試（可選）
 
 ```bash
-# 啟動本地開發伺服器
+# 使用 Bun（推薦）
+bun run dev
+
+# 或使用 npm
 npm run dev
 
-# 或
+# 或直接使用 wrangler
 wrangler dev
 ```
 
@@ -95,10 +108,14 @@ wrangler dev
 ### 步驟 5：部署到 Cloudflare
 
 ```bash
+# 使用 Bun（推薦，更快）
+bun run deploy
+
+# 或使用 npm
 npm run deploy
 
-# 或
-wrangler deploy
+# 或使用一鍵部署腳本
+bash deploy.sh
 ```
 
 ### 步驟 6：設定自訂域名路由
@@ -326,21 +343,27 @@ wrangler tail
 ## 🔗 有用的指令
 
 ```bash
-# 查看 Worker 日誌
-wrangler tail
+# 本地開發
+bun run dev              # 使用 Bun
+npm run dev              # 使用 npm
 
-# 查看 Worker 詳細資訊
+# 部署
+bun run deploy           # 使用 Bun（更快）
+npm run deploy           # 使用 npm
+
+# 查看即時日誌
+bun run tail             # 使用 Bun
+npm run tail             # 使用 npm
+wrangler tail            # 直接使用 wrangler
+
+# 查看 Cloudflare 帳號資訊
 wrangler whoami
 
 # 刪除 Worker
 wrangler delete
 
-# 發布特定版本
-wrangler versions upload
-wrangler versions deploy
-
-# 測試環境變數
-wrangler dev --var KEY:VALUE
+# 清理並重新安裝依賴
+bun run clean && bun install
 ```
 
 ---
