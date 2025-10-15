@@ -143,7 +143,7 @@ export default {
       // 4. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
       if (url.pathname === '/favicon.ico') {
         try {
-          response = await getAssetFromKV(
+          let response = await getAssetFromKV(
             {
               request,
               waitUntil: ctx.waitUntil.bind(ctx),
