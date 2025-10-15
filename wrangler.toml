@@ -9,7 +9,12 @@ account_id = "562f1caaf716714f4913ae40a1772c76" # 請填入您的 Cloudflare Acc
 # Worker 類型：模組語法
 workers_dev = true
 
-# 自訂域名路由
+# 注意：建議使用 Custom Domains 而非 routes
+# 請在 Cloudflare Dashboard 設定自訂域名：
+# Workers & Pages → cardioanalytics-worker → Settings → Domains & Routes → Add Custom Domain
+# 或使用 CLI：wrangler deployments domains add cardioanalytics.twinhao.com
+
+# 暫時保留 routes 設定以確保相容性
 routes = [
   { pattern = "cardioanalytics.twinhao.com/*", zone_name = "twinhao.com" }
 ]
