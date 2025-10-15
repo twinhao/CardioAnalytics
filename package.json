@@ -9,7 +9,6 @@
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "test": "wrangler dev --local",
-    "install": "bun install",
     "clean": "rm -rf node_modules bun.lockb"
   },
   "keywords": [
