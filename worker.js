@@ -11,6 +11,18 @@
 
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 
+/**
+ * 安全地解析 Asset Manifest
+ */
+function getAssetManifest(env) {
+  try {
+    return env.__STATIC_CONTENT_MANIFEST ? JSON.parse(env.__STATIC_CONTENT_MANIFEST) : {};
+  } catch (e) {
+    console.error('Failed to parse asset manifest:', e);
+    return {};
+  }
+}
+
 // 安全標頭配置
 const SECURITY_HEADERS = {
   // CORS 設定
@@ -150,7 +162,7 @@ export default {
             },
             {
               ASSET_NAMESPACE: env.__STATIC_CONTENT,
-              ASSET_MANIFEST: JSON.parse(env.__STATIC_CONTENT_MANIFEST),
+              ASSET_MANIFEST: getAssetManifest(env),
             }
           );
         } catch (e) {
@@ -174,7 +186,7 @@ export default {
           },
           {
             ASSET_NAMESPACE: env.__STATIC_CONTENT,
-            ASSET_MANIFEST: JSON.parse(env.__STATIC_CONTENT_MANIFEST),
+            ASSET_MANIFEST: getAssetManifest(env),
             cacheControl: {
               bypassCache: false,
             },
@@ -204,7 +216,7 @@ export default {
               },
               {
                 ASSET_NAMESPACE: env.__STATIC_CONTENT,
-                ASSET_MANIFEST: JSON.parse(env.__STATIC_CONTENT_MANIFEST),
+                ASSET_MANIFEST: getAssetManifest(env),
               }
             );
             response = new Response(response.body, {
@@ -233,7 +245,7 @@ export default {
               },
               {
                 ASSET_NAMESPACE: env.__STATIC_CONTENT,
-                ASSET_MANIFEST: JSON.parse(env.__STATIC_CONTENT_MANIFEST),
+                ASSET_MANIFEST: getAssetManifest(env),
               }
             );
             response = new Response(response.body, {
