@@ -83,8 +83,8 @@ function isValidPath(pathname) {
   const suspiciousPatterns = [
     /\.\./,              // 路徑遍歷 (../)
     /\/\./,              // 隱藏檔案 (/.)
-    /\.(bak|bac|old|tmp|swp|log|sql|db|env|config|ini|htm|000)$/i,  // 敏感副檔名
-    /^\/[^\/]*\.(php|asp|jsp|cgi)/i,  // 後端腳本
+    /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|htm|000)/i,  // 敏感副檔名（任何位置）
+    /^\/[^\/]*\.(php|asp|asa|jsp|cgi)/i,  // 後端腳本
     /(admin|login|wp-|phpmyadmin|servlet|cgi-bin|usage_\d)/i,  // 常見攻擊目標
   ];
 
