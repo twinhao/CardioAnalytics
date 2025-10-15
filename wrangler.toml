@@ -3,7 +3,7 @@
 
 name = "cardioanalytics-worker"
 main = "worker.js"
-compatibility_date = "2025-10-15"
+compatibility_date = "2025-10-15"  # 使用最新的 compatibility date
 account_id = "562f1caaf716714f4913ae40a1772c76" # 請填入您的 Cloudflare Account ID
 
 # Worker 類型：模組語法
@@ -20,8 +20,3 @@ bucket = "./public"
 [vars]
 ENVIRONMENT = "production"
 
-# KV 命名空間綁定（可選，用於快取）
-# [[kv_namespaces]]
-# binding = "CACHE"
-# id = "your-kv-namespace-id"
-# preview_id = "your-preview-kv-namespace-id"

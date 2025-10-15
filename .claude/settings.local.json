@@ -3,7 +3,14 @@
     "allow": [
       "Bash(timeout 3 openssl s_client:*)",
       "Bash(curl -s -o /dev/null -w \"HTTP Status: %{http_code}\\n\" https://cardioanalytics.twinhao.com/nonexistent-page-test-12345)",
-      "Bash(curl -s -X TRACK https://cardioanalytics.twinhao.com/ -o /dev/null -w \"HTTP Status: %{http_code}\\n\")"
+      "Bash(curl -s -X TRACK https://cardioanalytics.twinhao.com/ -o /dev/null -w \"HTTP Status: %{http_code}\\n\")",
+      "Bash(gh run list:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\n修復 DAST 安全掃描發現的漏洞\n\n修復內容：\n✅ Low: 修正 TRACK 方法錯誤處理（返回 405 而非 501）\n✅ Low: 降低 CORS Max-Age 至 1800 秒（30 分鐘）\n✅ Low: 確認首頁 Cache-Control 使用 no-store\n✅ Low: 確認 HSTS max-age 為 12 個月\n⚠️  High: 弱 SSL 加密套件需在 Cloudflare Dashboard 設定\n\n安全改進：\n- 對不允許的 HTTP 方法返回簡潔的 405 錯誤\n- CORS 預檢緩存時間符合安全建議（≤30 分鐘）\n- 所有 HTML 頁面強制 no-store 防止敏感資料緩存\n- HSTS 設置 12 個月過期時間\n\n參考：OpenText DAST 掃描報告 (2025-10-15)\n- CWE-550: Information Exposure Through Server Error Message\n- CWE-525: Information Exposure Through Browser Caching\n- CWE-319: Cleartext Transmission of Sensitive Information\n- CWE-326/327: Inadequate Encryption Strength\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(bun:*)",
+      "Bash(npm outdated)"
     ],
     "deny": [],
     "ask": []
