@@ -192,6 +192,12 @@ input[type="range"]::-webkit-slider-thumb {
     }
 }
 
+/* 按鈕容器樣式 */
+.button-container {
+    display: flex;
+    gap: 10px;
+}
+
 @media (max-width: 768px) {
     .controls {
         flex-direction: column;
