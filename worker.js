@@ -64,26 +64,42 @@ const SECURITY_HEADERS = {
   'Server': 'Cloudflare Workers',
 };
 
-// 敏感檔案副檔名黑名單（防止資訊洩漏 CWE-538）
-const BLOCKED_EXTENSIONS = [
-  '.bak', '.backup', '.old', '.orig', '.tmp', '.temp',
-  '.swp', '.swo', '.log', '.sql', '.db', '.sqlite',
-  '.env', '.git', '.svn', '.DS_Store', '.htaccess',
-  '.config', '.conf', '.ini', '.xml', '.yml', '.yaml',
-  '.htm'  // 阻擋 .htm (只允許 .html)
-];
+// 安全路徑驗證：使用白名單 + 簡單規則（更簡潔的方法）
+// 只允許合法的路徑模式，直接拒絕所有可疑請求
 
-// 可疑路徑模式黑名單（防止伺服器探測 CWE-937, CWE-552, CWE-550）
-const BLOCKED_PATTERNS = [
-  /\/servlet\/?$/i,           // Java servlet 路徑
-  /\/cgi-bin\/?$/i,           // CGI 路徑
-  /\/admin\/?$/i,             // 管理後台路徑
-  /\/wp-admin\/?$/i,          // WordPress 管理
-  /\/phpmyadmin\/?$/i,        // phpMyAdmin
-  /\/usage_\d+\./i,           // Webalizer 使用統計頁面
-  /\/\..*\..*\./,             // 異常路徑如 /.?zxz?.app.js
-  /^\/[^\/]+\/$/,             // 任何以 / 結尾的目錄路徑（例如 /index/）
-];
+/**
+ * 檢查路徑是否合法
+ * @param {string} pathname - URL 路徑
+ * @returns {boolean} - true 表示合法，false 表示應該阻擋
+ */
+function isValidPath(pathname) {
+  // 規則 1：只允許根路徑 /
+  if (pathname === '/') return true;
+
+  // 規則 2：阻擋任何帶 trailing slash 的路徑（防止目錄列表）
+  if (pathname.endsWith('/')) return false;
+
+  // 規則 3：阻擋明顯可疑的模式
+  const suspiciousPatterns = [
+    /\.\./,              // 路徑遍歷 (../)
+    /\/\./,              // 隱藏檔案 (/.)
+    /\.(bak|bac|old|tmp|swp|log|sql|db|env|config|ini|htm|000)$/i,  // 敏感副檔名
+    /^\/[^\/]*\.(php|asp|jsp|cgi)/i,  // 後端腳本
+    /(admin|login|wp-|phpmyadmin|servlet|cgi-bin|usage_\d)/i,  // 常見攻擊目標
+  ];
+
+  // 如果匹配任何可疑模式，拒絕
+  if (suspiciousPatterns.some(pattern => pattern.test(pathname))) {
+    return false;
+  }
+
+  // 規則 4：只允許合理的檔案名格式
+  // 允許：單層路徑，檔名包含字母、數字、底線、連字號、點
+  // 不允許：多層路徑 (如 /admin/login.php)
+  const validFormat = /^\/[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+
+  return validFormat.test(pathname);
+}
 
 // 快取控制標頭
 const CACHE_HEADERS = {
@@ -162,16 +178,8 @@ export default {
         return Response.redirect(url.toString(), 301);
       }
 
-      // 2. 阻擋帶有 trailing slash 的路徑（除了根路徑）- 必須在其他處理之前
-      if (url.pathname !== '/' && url.pathname.endsWith('/')) {
-        return new Response(null, {
-          status: 404,
-          headers: SECURITY_HEADERS,
-        });
-      }
-
-      // 2b. 阻擋 /index 路徑（避免 Cloudflare 自動重定向）
-      if (url.pathname === '/index' || url.pathname === '/index.htm') {
+      // 2. 路徑驗證：使用白名單檢查（簡潔的單一檢查點）
+      if (!isValidPath(url.pathname)) {
         return new Response(null, {
           status: 404,
           headers: SECURITY_HEADERS,
@@ -191,7 +199,7 @@ export default {
         });
       }
 
-      // 3. 只允許 GET 和 HEAD 方法（返回簡潔錯誤訊息）
+      // 4. 只允許 GET 和 HEAD 方法（返回簡潔錯誤訊息）
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response(null, {
           status: 405,
@@ -199,26 +207,6 @@ export default {
             'Allow': 'GET, HEAD, OPTIONS',
             ...SECURITY_HEADERS,
           },
-        });
-      }
-
-      // 4. 阻擋敏感檔案副檔名與可疑路徑（CWE-538, CWE-937, CWE-550）
-      const pathname = url.pathname;
-      const pathnameLower = pathname.toLowerCase();
-
-      // 檢查副檔名黑名單
-      if (BLOCKED_EXTENSIONS.some(ext => pathnameLower.endsWith(ext))) {
-        return new Response(null, {
-          status: 404,
-          headers: SECURITY_HEADERS,
-        });
-      }
-
-      // 檢查路徑模式黑名單
-      if (BLOCKED_PATTERNS.some(pattern => pattern.test(pathname))) {
-        return new Response(null, {
-          status: 404,
-          headers: SECURITY_HEADERS,
         });
       }
 
