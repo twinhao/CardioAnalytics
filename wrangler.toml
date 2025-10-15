@@ -13,8 +13,9 @@ workers_dev = true
 # Dashboard: Workers & Pages → cardioanalytics-worker → Settings → Domains & Routes
 
 # 資產綁定 - 將靜態檔案打包進 Worker
-[site]
-bucket = "./public"
+# 使用 Wrangler v4 的新格式
+[assets]
+directory = "./public"
 
 # 環境變數
 [vars]
