@@ -133,9 +133,10 @@ const SECURITY_HEADERS = {
 
   // 內容安全政策（A03: Injection - XSS 防護）
   // A08: Software and Data Integrity - 建議在 HTML 中為外部資源使用 SRI
+  // 移除 unsafe-inline，使用更安全的策略
   'Content-Security-Policy':
     "default-src 'self'; " +
-    "style-src 'self' 'unsafe-inline'; " +  // unsafe-inline 僅用於內聯樣式
+    "style-src 'self'; " +                   // 移除 unsafe-inline，只允許同源樣式
     "script-src 'self'; " +                  // 強制所有腳本來自同源
     "img-src 'self' data:; " +               // 允許 data: URI 用於內聯圖片
     "font-src 'self'; " +
@@ -162,8 +163,10 @@ const SECURITY_HEADERS = {
   // 權限政策（A05: Security Misconfiguration）
   'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
 
-  // 移除伺服器資訊（A05: Security Misconfiguration - 減少資訊洩露）
-  'Server': 'Cloudflare Workers',
+  // 完全移除伺服器資訊（A05: Security Misconfiguration - 防止指紋識別）
+  // 不設置 Server 標頭，或使用通用值
+  // 注意：Cloudflare 會自動添加 'Server: cloudflare'，我們需要覆蓋它
+  'Server': '',  // 設為空值以移除伺服器資訊
 };
 
 // 安全路徑驗證：嚴格白名單策略
@@ -304,18 +307,24 @@ export default {
       }
 
       // 2. 針對 HTML 請求，強制 Cloudflare 不使用快取
+      // 這是關鍵：確保 Worker 總是被執行，而不是從快取返回
       const isHtmlRequest = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
       if (isHtmlRequest) {
-        // 清除這個 URL 的 Cloudflare 快取
+        // 方法 1: 清除 Cloudflare 快取
         const cache = caches.default;
         await cache.delete(request);
         await cache.delete(new Request(url.toString(), { method: 'GET' }));
 
-        // 建立新請求，添加 Cache-Control: no-cache 以繞過 Cloudflare 快取
+        // 方法 2: 在請求頭中添加 Cache-Control 以告知 Cloudflare 不要快取
+        const newHeaders = new Headers(request.headers);
+        newHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+        // 建立新請求物件，強制繞過 Cloudflare 快取
         request = new Request(request, {
+          headers: newHeaders,
           cf: {
-            cacheEverything: false,
-            cacheTtl: 0,
+            cacheEverything: false,  // 禁止快取
+            cacheTtl: 0,            // TTL = 0
             cacheTtlByStatus: {
               '200-299': 0,
               '300-399': 0,
@@ -513,23 +522,34 @@ export default {
 
       // 10. 先添加安全標頭
       Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
-        newResponse.headers.set(key, value);
+        if (key === 'Server' && value === '') {
+          // 如果 Server 標頭設為空值，則刪除它
+          newResponse.headers.delete('Server');
+        } else {
+          newResponse.headers.set(key, value);
+        }
       });
 
       // 11. 根據檔案類型設置快取標頭
       const isHtml = url.pathname.endsWith('.html') || url.pathname === '/';
 
       if (isHtml) {
-        // HTML 檔案 - 完全禁止快取
-        newResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-        newResponse.headers.set('CDN-Cache-Control', 'no-store');
-        newResponse.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+        // HTML 檔案 - 完全禁止快取（A05: Security Misconfiguration）
+        // 使用多層標頭確保瀏覽器和 CDN 都不快取
+        newResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private, max-age=0');
+        newResponse.headers.set('CDN-Cache-Control', 'no-store, max-age=0');
+        newResponse.headers.set('Cloudflare-CDN-Cache-Control', 'no-store, max-age=0');
+        newResponse.headers.set('Surrogate-Control', 'no-store, max-age=0');  // 給代理伺服器
         newResponse.headers.set('Pragma', 'no-cache');
         newResponse.headers.set('Expires', '0');
+
+        // 添加 Vary 標頭防止共享快取
+        newResponse.headers.set('Vary', 'Accept-Encoding, User-Agent');
 
         // 清除 Cloudflare 快取
         const cache = caches.default;
         await cache.delete(request);
+        await cache.delete(new Request(url.toString(), { method: 'GET' }));
       } else {
         // 其他檔案 - 根據類型設置快取
         const cacheHeaders = getCacheHeaders(url.pathname);
