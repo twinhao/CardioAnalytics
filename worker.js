@@ -22,7 +22,7 @@ const SECURITY_HEADERS = {
   // 內容安全政策
   'Content-Security-Policy':
     "default-src 'self'; " +
-    "style-src 'self'; " +
+    "style-src 'self' 'unsafe-inline'; " +
     "script-src 'self'; " +
     "img-src 'self' data:; " +
     "font-src 'self'; " +
@@ -140,7 +140,31 @@ export default {
         });
       }
 
-      // 4. 嘗試從 KV 獲取靜態資源
+      // 4. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
+      if (url.pathname === '/favicon.ico') {
+        try {
+          response = await getAssetFromKV(
+            {
+              request,
+              waitUntil: ctx.waitUntil.bind(ctx),
+            },
+            {
+              ASSET_NAMESPACE: env.__STATIC_CONTENT,
+              ASSET_MANIFEST: JSON.parse(env.__STATIC_CONTENT_MANIFEST),
+            }
+          );
+        } catch (e) {
+          // favicon 不存在，返回 204 No Content
+          return new Response(null, {
+            status: 204,
+            headers: SECURITY_HEADERS
+          });
+        }
+        response = addSecurityHeaders(response);
+        return response;
+      }
+
+      // 5. 嘗試從 KV 獲取靜態資源
       let response;
       try {
         response = await getAssetFromKV(
@@ -165,7 +189,7 @@ export default {
           }
         );
       } catch (e) {
-        // 5. 如果找不到資源，返回 404
+        // 6. 如果找不到資源，返回 404
         if (e.status === 404 || e.message.includes('could not find')) {
           try {
             // 嘗試載入自訂 404 頁面
@@ -196,7 +220,7 @@ export default {
             });
           }
         } else if (e.status >= 500) {
-          // 6. 伺服器錯誤，返回自訂 500 頁面
+          // 7. 伺服器錯誤，返回自訂 500 頁面
           try {
             const errorRequest = new Request(
               new URL('/500.html', request.url).toString(),
@@ -229,10 +253,10 @@ export default {
         }
       }
 
-      // 7. 新增安全標頭
+      // 8. 新增安全標頭
       response = addSecurityHeaders(response);
 
-      // 8. 新增適當的快取標頭
+      // 9. 新增適當的快取標頭
       const cacheHeaders = getCacheHeaders(url.pathname);
       Object.entries(cacheHeaders).forEach(([key, value]) => {
         response.headers.set(key, value);
@@ -241,7 +265,7 @@ export default {
       return response;
 
     } catch (error) {
-      // 9. 全域錯誤處理
+      // 10. 全域錯誤處理
       console.error('Worker error:', error);
 
       return new Response(
