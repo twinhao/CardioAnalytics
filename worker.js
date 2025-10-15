@@ -64,6 +64,27 @@ const SECURITY_HEADERS = {
   'Server': 'Cloudflare Workers',
 };
 
+// 敏感檔案副檔名黑名單（防止資訊洩漏 CWE-538）
+const BLOCKED_EXTENSIONS = [
+  '.bak', '.backup', '.old', '.orig', '.tmp', '.temp',
+  '.swp', '.swo', '.log', '.sql', '.db', '.sqlite',
+  '.env', '.git', '.svn', '.DS_Store', '.htaccess',
+  '.config', '.conf', '.ini', '.xml', '.yml', '.yaml',
+  '.htm'  // 阻擋 .htm (只允許 .html)
+];
+
+// 可疑路徑模式黑名單（防止伺服器探測 CWE-937, CWE-552, CWE-550）
+const BLOCKED_PATTERNS = [
+  /\/servlet\/?$/i,           // Java servlet 路徑
+  /\/cgi-bin\/?$/i,           // CGI 路徑
+  /\/admin\/?$/i,             // 管理後台路徑
+  /\/wp-admin\/?$/i,          // WordPress 管理
+  /\/phpmyadmin\/?$/i,        // phpMyAdmin
+  /\/usage_\d+\./i,           // Webalizer 使用統計頁面
+  /\/\..*\..*\./,             // 異常路徑如 /.?zxz?.app.js
+  /^\/[^\/]+\/$/,             // 任何以 / 結尾的目錄路徑（例如 /index/）
+];
+
 // 快取控制標頭
 const CACHE_HEADERS = {
   // HTML 檔案 - 禁止快取
@@ -165,10 +186,38 @@ export default {
         });
       }
 
-      // 4. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
+      // 4. 阻擋敏感檔案副檔名與可疑路徑（CWE-538, CWE-937, CWE-552, CWE-550）
+      const pathname = url.pathname;
+      const pathnameLower = pathname.toLowerCase();
+
+      // 特別處理：阻擋所有以 / 結尾的路徑（除了根路徑 /）
+      if (pathname !== '/' && pathname.endsWith('/')) {
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 檢查副檔名黑名單
+      if (BLOCKED_EXTENSIONS.some(ext => pathnameLower.endsWith(ext))) {
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 檢查路徑模式黑名單
+      if (BLOCKED_PATTERNS.some(pattern => pattern.test(pathname))) {
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 5. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
       if (url.pathname === '/favicon.ico') {
         try {
-          let response = await getAssetFromKV(
+          const faviconResponse = await getAssetFromKV(
             {
               request,
               waitUntil: ctx.waitUntil.bind(ctx),
@@ -178,6 +227,7 @@ export default {
               ASSET_MANIFEST: getAssetManifest(env),
             }
           );
+          return addSecurityHeaders(faviconResponse);
         } catch (e) {
           // favicon 不存在，返回 204 No Content
           return new Response(null, {
@@ -185,11 +235,9 @@ export default {
             headers: SECURITY_HEADERS
           });
         }
-        response = addSecurityHeaders(response);
-        return response;
       }
 
-      // 5. 嘗試從 KV 獲取靜態資源
+      // 6. 嘗試從 KV 獲取靜態資源
       let response;
       try {
         response = await getAssetFromKV(
@@ -214,7 +262,7 @@ export default {
           }
         );
       } catch (e) {
-        // 6. 如果找不到資源，返回 404
+        // 7. 如果找不到資源，返回 404
         if (e.status === 404 || e.message.includes('could not find')) {
           try {
             // 嘗試載入自訂 404 頁面
@@ -245,7 +293,7 @@ export default {
             });
           }
         } else if (e.status >= 500) {
-          // 7. 伺服器錯誤，返回自訂 500 頁面
+          // 8. 伺服器錯誤，返回自訂 500 頁面
           try {
             const errorRequest = new Request(
               new URL('/500.html', request.url).toString(),
@@ -278,16 +326,16 @@ export default {
         }
       }
 
-      // 8. 新增安全標頭
+      // 9. 新增安全標頭
       response = addSecurityHeaders(response);
 
-      // 9. 新增適當的快取標頭
+      // 10. 新增適當的快取標頭
       const cacheHeaders = getCacheHeaders(url.pathname);
       Object.entries(cacheHeaders).forEach(([key, value]) => {
         response.headers.set(key, value);
       });
 
-      // 10. 針對 HTML 檔案，明確告訴 Cloudflare 不要快取
+      // 11. 針對 HTML 檔案，明確告訴 Cloudflare 不要快取
       if (url.pathname.endsWith('.html') || url.pathname === '/') {
         // 使用 Cache API 清除這個請求的快取
         const cache = caches.default;
@@ -314,7 +362,7 @@ export default {
       return response;
 
     } catch (error) {
-      // 10. 全域錯誤處理
+      // 12. 全域錯誤處理
       console.error('Worker error:', error);
 
       return new Response(
