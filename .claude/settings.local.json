@@ -10,7 +10,13 @@
       "Bash(git push:*)",
       "Bash(curl:*)",
       "Bash(bun:*)",
-      "Bash(npm outdated)"
+      "Bash(npm outdated)",
+      "Bash(npx wrangler dev:*)",
+      "Bash(npx wrangler deployments list:*)",
+      "Bash(npx wrangler kv:namespace list:*)",
+      "Bash(npx wrangler kv namespace list:*)",
+      "Bash(npx wrangler kv key list:*)",
+      "Bash(npx wrangler deploy:*)"
     ],
     "deny": [],
     "ask": []
