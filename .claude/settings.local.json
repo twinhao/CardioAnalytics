@@ -16,7 +16,8 @@
       "Bash(npx wrangler kv:namespace list:*)",
       "Bash(npx wrangler kv namespace list:*)",
       "Bash(npx wrangler kv key list:*)",
-      "Bash(npx wrangler deploy:*)"
+      "Bash(npx wrangler deploy:*)",
+      "Bash(host:*)"
     ],
     "deny": [],
     "ask": []
