@@ -162,7 +162,23 @@ export default {
         return Response.redirect(url.toString(), 301);
       }
 
-      // 2. 處理 OPTIONS 預檢請求（CORS）
+      // 2. 阻擋帶有 trailing slash 的路徑（除了根路徑）- 必須在其他處理之前
+      if (url.pathname !== '/' && url.pathname.endsWith('/')) {
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 2b. 阻擋 /index 路徑（避免 Cloudflare 自動重定向）
+      if (url.pathname === '/index' || url.pathname === '/index.htm') {
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 3. 處理 OPTIONS 預檢請求（CORS）
       if (request.method === 'OPTIONS') {
         return new Response(null, {
           status: 204,
@@ -186,17 +202,9 @@ export default {
         });
       }
 
-      // 4. 阻擋敏感檔案副檔名與可疑路徑（CWE-538, CWE-937, CWE-552, CWE-550）
+      // 4. 阻擋敏感檔案副檔名與可疑路徑（CWE-538, CWE-937, CWE-550）
       const pathname = url.pathname;
       const pathnameLower = pathname.toLowerCase();
-
-      // 特別處理：阻擋所有以 / 結尾的路徑（除了根路徑 /）
-      if (pathname !== '/' && pathname.endsWith('/')) {
-        return new Response(null, {
-          status: 404,
-          headers: SECURITY_HEADERS,
-        });
-      }
 
       // 檢查副檔名黑名單
       if (BLOCKED_EXTENSIONS.some(ext => pathnameLower.endsWith(ext))) {
@@ -239,10 +247,23 @@ export default {
 
       // 6. 嘗試從 KV 獲取靜態資源
       let response;
+
+      // 在呼叫 getAssetFromKV 之前，先建立映射後的 URL
+      let assetPath = url.pathname;
+      if (assetPath === '/') {
+        assetPath = '/index.html';
+      }
+
+      // 建立新的請求物件
+      const assetRequest = new Request(
+        new URL(assetPath, url.origin).toString(),
+        request
+      );
+
       try {
         response = await getAssetFromKV(
           {
-            request,
+            request: assetRequest,
             waitUntil: ctx.waitUntil.bind(ctx),
           },
           {
@@ -250,14 +271,6 @@ export default {
             ASSET_MANIFEST: getAssetManifest(env),
             cacheControl: {
               bypassCache: true,  // 繞過快取，確保每次都從 Worker 返回最新標頭
-            },
-            mapRequestToAsset: (req) => {
-              const url = new URL(req.url);
-              // 將 / 映射到 /index.html
-              if (url.pathname === '/') {
-                url.pathname = '/index.html';
-              }
-              return new Request(url.toString(), req);
             },
           }
         );
