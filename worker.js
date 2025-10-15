@@ -15,9 +15,9 @@ import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 const SECURITY_HEADERS = {
   // CORS 設定
   'Access-Control-Allow-Origin': 'https://cardioanalytics.twinhao.com',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '1800', // 30 分鐘
+  'Access-Control-Max-Age': '1800', // 30 分鐘（符合安全建議，不超過30分鐘）
 
   // 內容安全政策
   'Content-Security-Policy':
@@ -33,7 +33,7 @@ const SECURITY_HEADERS = {
     "form-action 'self'; " +
     "upgrade-insecure-requests;",
 
-  // HSTS - 強制 HTTPS（12 個月）
+  // HSTS - 強制 HTTPS（12 個月 = 31536000 秒）
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
 
   // 防止 MIME 類型嗅探
@@ -125,16 +125,19 @@ export default {
             'Access-Control-Allow-Methods': SECURITY_HEADERS['Access-Control-Allow-Methods'],
             'Access-Control-Allow-Headers': SECURITY_HEADERS['Access-Control-Allow-Headers'],
             'Access-Control-Max-Age': SECURITY_HEADERS['Access-Control-Max-Age'],
+            'Strict-Transport-Security': SECURITY_HEADERS['Strict-Transport-Security'],
           },
         });
       }
 
-      // 3. 只允許 GET 和 HEAD 方法
+      // 3. 只允許 GET 和 HEAD 方法（拒絕 TRACK, TRACE 等不安全方法）
       if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
+        // 對於不允許的方法，返回簡潔的 405 錯誤，不洩露伺服器資訊
+        return new Response(null, {
           status: 405,
           headers: {
             'Allow': 'GET, HEAD, OPTIONS',
+            'Content-Length': '0',
             ...SECURITY_HEADERS,
           },
         });
