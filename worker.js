@@ -123,6 +123,18 @@ export default {
     try {
       const url = new URL(request.url);
 
+      // 0. 針對 HTML 請求，強制 Cloudflare 不使用快取
+      const isHtmlRequest = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
+      if (isHtmlRequest) {
+        // 建立新請求，添加 Cache-Control: no-cache 以繞過 Cloudflare 快取
+        request = new Request(request, {
+          cf: {
+            cacheEverything: false,
+            cacheTtl: 0,
+          },
+        });
+      }
+
       // 1. 強制 HTTPS
       if (url.protocol === 'http:') {
         url.protocol = 'https:';
@@ -274,6 +286,30 @@ export default {
       Object.entries(cacheHeaders).forEach(([key, value]) => {
         response.headers.set(key, value);
       });
+
+      // 10. 針對 HTML 檔案，明確告訴 Cloudflare 不要快取
+      if (url.pathname.endsWith('.html') || url.pathname === '/') {
+        // 使用 Cache API 清除這個請求的快取
+        const cache = caches.default;
+        await cache.delete(request);
+
+        // 建立新的 Response，強制設定 no-store
+        response = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+
+        // 設定多層快取控制標頭
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        response.headers.set('CDN-Cache-Control', 'no-store');
+        response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+        response.headers.delete('CF-Cache-Status');
+        response.headers.delete('ETag'); // 移除 ETag 防止條件快取
+        response.headers.delete('Last-Modified');
+      }
 
       return response;
 
