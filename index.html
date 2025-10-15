@@ -6,14 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>心電圖可視化系統</title>
 
-    <!-- 安全標頭：Content Security Policy (已移除 unsafe-inline) -->
-    <!-- 注意：主要的安全標頭應透過 _headers 檔案在伺服器端設定 -->
+    <!-- 安全標頭：主要安全標頭已透過 _headers 檔案在 Cloudflare Pages 設定 -->
+    <!-- Meta 標籤作為備援保護層 -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests;">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+
+    <!-- 防止敏感資料快取 -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, private">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 
     <!-- 引入外部 CSS -->
     <link rel="stylesheet" href="styles.css">
-
-    <!-- 注意：HSTS 標頭應該在伺服器端設定，而非 meta 標籤 -->
 </head>
 
 <body>

@@ -1,0 +1,10 @@
+# Cloudflare Pages 重定向配置
+# 強制所有 HTTP 流量重定向到 HTTPS
+
+# 注意：Cloudflare Pages 預設已啟用 HTTPS，此處為額外保護
+http://cardioanalytics.twinhao.com/* https://cardioanalytics.twinhao.com/:splat 301!
+http://www.cardioanalytics.twinhao.com/* https://cardioanalytics.twinhao.com/:splat 301!
+
+# 自訂錯誤頁面 - 防止錯誤訊息洩露系統資訊
+/404.html /404.html 404
+/500.html /500.html 500
