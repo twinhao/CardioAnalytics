@@ -1,0 +1,29 @@
+# Cloudflare Workers 配置檔案
+# 網站：cardioanalytics.twinhao.com
+
+name = "cardioanalytics-worker"
+main = "worker.js"
+compatibility_date = "2025-10-15"
+account_id = "562f1caaf716714f4913ae40a1772c76" # 請填入您的 Cloudflare Account ID
+
+# Worker 類型：模組語法
+workers_dev = true
+
+# 自訂域名路由
+routes = [
+  { pattern = "cardioanalytics.twinhao.com/*", zone_name = "twinhao.com" }
+]
+
+# 資產綁定 - 將靜態檔案打包進 Worker
+[site]
+bucket = "./public"
+
+# 環境變數
+[vars]
+ENVIRONMENT = "production"
+
+# KV 命名空間綁定（可選，用於快取）
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id"
+# preview_id = "your-preview-kv-namespace-id"

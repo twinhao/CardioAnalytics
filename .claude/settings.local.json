@@ -1,8 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(curl -I https://cardioanalytics.twinhao.com)",
-      "Bash(openssl s_client:*)"
+      "Bash(timeout 3 openssl s_client:*)",
+      "Bash(curl -s -o /dev/null -w \"HTTP Status: %{http_code}\\n\" https://cardioanalytics.twinhao.com/nonexistent-page-test-12345)",
+      "Bash(curl -s -X TRACK https://cardioanalytics.twinhao.com/ -o /dev/null -w \"HTTP Status: %{http_code}\\n\")"
     ],
     "deny": [],
     "ask": []
