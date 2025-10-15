@@ -17,7 +17,9 @@
       "Bash(npx wrangler kv namespace list:*)",
       "Bash(npx wrangler kv key list:*)",
       "Bash(npx wrangler deploy:*)",
-      "Bash(host:*)"
+      "Bash(host:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\n修復：攔截雙重副檔名備份檔案\n\n問題：\n- /global.asa.backup 返回 500（未被攔截）\n- 原因：正則表達式只檢查結尾副檔名\n\n解決方案：\n✅ 移除正則表達式中的 $ 結尾符號\n✅ 改為匹配路徑中「任何位置」的敏感關鍵字\n✅ 添加 .backup 和 .asa 到可疑模式\n\n現在可以攔截：\n- 單層副檔名：/file.bak, /file.old\n- 雙層副檔名：/file.asa.backup, /file.php.bak\n- 多層副檔名：/file.conf.backup.old\n\n測試驗證：\n✅ /global.asa.backup → 404\n✅ /global.bak → 404  \n✅ /app.js → 200 (正常)\n✅ / → 200 (正常)\n\n優點：\n這就是模式匹配的威力！一個小改動就能\n攔截無限多種備份檔案變體，不需要窮舉。\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npx wrangler:*)"
     ],
     "deny": [],
     "ask": []

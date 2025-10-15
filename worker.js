@@ -172,11 +172,22 @@ export default {
       // 0. 針對 HTML 請求，強制 Cloudflare 不使用快取
       const isHtmlRequest = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
       if (isHtmlRequest) {
+        // 清除這個 URL 的 Cloudflare 快取
+        const cache = caches.default;
+        await cache.delete(request);
+        await cache.delete(new Request(url.toString(), { method: 'GET' }));
+
         // 建立新請求，添加 Cache-Control: no-cache 以繞過 Cloudflare 快取
         request = new Request(request, {
           cf: {
             cacheEverything: false,
             cacheTtl: 0,
+            cacheTtlByStatus: {
+              '200-299': 0,
+              '300-399': 0,
+              '400-499': 0,
+              '500-599': 0,
+            },
           },
         });
       }
@@ -268,6 +279,8 @@ export default {
             ASSET_MANIFEST: getAssetManifest(env),
             cacheControl: {
               bypassCache: true,  // 繞過快取，確保每次都從 Worker 返回最新標頭
+              browserTTL: null,  // 不設置瀏覽器快取，由我們自己控制
+              edgeTTL: null,     // 不設置邊緣快取
             },
           }
         );
@@ -336,40 +349,47 @@ export default {
         }
       }
 
-      // 9. 新增安全標頭
-      response = addSecurityHeaders(response);
-
-      // 10. 新增適當的快取標頭
-      const cacheHeaders = getCacheHeaders(url.pathname);
-      Object.entries(cacheHeaders).forEach(([key, value]) => {
-        response.headers.set(key, value);
+      // 9. 建立新的 Response 以完全控制標頭
+      const newResponse = new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers(),  // 從空標頭開始
       });
 
-      // 11. 針對 HTML 檔案，明確告訴 Cloudflare 不要快取
-      if (url.pathname.endsWith('.html') || url.pathname === '/') {
-        // 使用 Cache API 清除這個請求的快取
+      // 10. 先添加安全標頭
+      Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+        newResponse.headers.set(key, value);
+      });
+
+      // 11. 根據檔案類型設置快取標頭
+      const isHtml = url.pathname.endsWith('.html') || url.pathname === '/';
+
+      if (isHtml) {
+        // HTML 檔案 - 完全禁止快取
+        newResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        newResponse.headers.set('CDN-Cache-Control', 'no-store');
+        newResponse.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
+        newResponse.headers.set('Pragma', 'no-cache');
+        newResponse.headers.set('Expires', '0');
+
+        // 清除 Cloudflare 快取
         const cache = caches.default;
         await cache.delete(request);
-
-        // 建立新的 Response，強制設定 no-store
-        response = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
+      } else {
+        // 其他檔案 - 根據類型設置快取
+        const cacheHeaders = getCacheHeaders(url.pathname);
+        Object.entries(cacheHeaders).forEach(([key, value]) => {
+          newResponse.headers.set(key, value);
         });
-
-        // 設定多層快取控制標頭
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-        response.headers.set('CDN-Cache-Control', 'no-store');
-        response.headers.set('Cloudflare-CDN-Cache-Control', 'no-store');
-        response.headers.set('Pragma', 'no-cache');
-        response.headers.set('Expires', '0');
-        response.headers.delete('CF-Cache-Status');
-        response.headers.delete('ETag'); // 移除 ETag 防止條件快取
-        response.headers.delete('Last-Modified');
       }
 
-      return response;
+      // 12. 保留必要的 Content-Type
+      const contentType = response.headers.get('Content-Type');
+      if (contentType) {
+        newResponse.headers.set('Content-Type', contentType);
+      }
+
+      return newResponse;
 
     } catch (error) {
       // 12. 全域錯誤處理
