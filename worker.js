@@ -69,6 +69,7 @@ const CACHE_HEADERS = {
   // HTML 檔案 - 禁止快取
   html: {
     'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    'CDN-Cache-Control': 'no-store',  // 明確指示 Cloudflare 不要快取
     'Pragma': 'no-cache',
     'Expires': '0',
   },
@@ -141,9 +142,9 @@ export default {
         });
       }
 
-      // 3. 只允許 GET 和 HEAD 方法
+      // 3. 只允許 GET 和 HEAD 方法（返回簡潔錯誤訊息）
       if (request.method !== 'GET' && request.method !== 'HEAD') {
-        return new Response('Method Not Allowed', {
+        return new Response(null, {
           status: 405,
           headers: {
             'Allow': 'GET, HEAD, OPTIONS',
@@ -188,7 +189,7 @@ export default {
             ASSET_NAMESPACE: env.__STATIC_CONTENT,
             ASSET_MANIFEST: getAssetManifest(env),
             cacheControl: {
-              bypassCache: false,
+              bypassCache: true,  // 繞過快取，確保每次都從 Worker 返回最新標頭
             },
             mapRequestToAsset: (req) => {
               const url = new URL(req.url);
