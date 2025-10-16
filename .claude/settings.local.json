@@ -26,7 +26,8 @@
       "Bash(do echo \"Testing $file:\")",
       "Bash(done)",
       "Bash(for i in {1..10})",
-      "Bash(do curl -s -o /dev/null -w \"Request $i: %{http_code}\\n\" https://cardioanalytics.twinhao.com/global.bak)"
+      "Bash(do curl -s -o /dev/null -w \"Request $i: %{http_code}\\n\" https://cardioanalytics.twinhao.com/global.bak)",
+      "Bash(for file in \"/global.backup\" \"/config.old\" \"/test.tmp\" \"/admin.sql\" \"/.env\" \"/wp-admin\" \"/phpmyadmin\" \"/global.asa.backup\" \"/file.php.bak\" \"/config.conf.backup.old\" \"/test.000\" \"/backup.tar.gz\")"
     ],
     "deny": [],
     "ask": []

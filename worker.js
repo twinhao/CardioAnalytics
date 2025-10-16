@@ -504,10 +504,25 @@ export default {
           duration,
         });
 
-        // 返回安全回應
-        return createSecureResponse(response.body, {
-          pathname,
-          contentType: response.headers.get('Content-Type'),
+        // 建立新的回應並確保包含所有安全標頭
+        const newHeaders = new Headers(response.headers);
+
+        // 強制應用所有安全標頭
+        Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
+          newHeaders.set(key, value);
+        });
+
+        // 應用快取策略
+        const cacheHeaders = getCachePolicy(pathname);
+        Object.entries(cacheHeaders).forEach(([key, value]) => {
+          newHeaders.set(key, value);
+        });
+
+        // 返回包含完整標頭的回應
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
         });
 
       } catch (e) {
