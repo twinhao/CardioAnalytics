@@ -212,6 +212,7 @@ function isValidPath(pathname) {
     /\.\d{3,}$/,                                                        // 數字副檔名 (.000, .001, etc)
     /\.(asa|inc|dat|conf|cfg|bck|copy|temp|cache|lock)$/i,            // 其他危險副檔名
     /(\.-old|-old|-backup|-bak|-orig|-copy|-save|~)$/i,               // 其他備份檔案命名模式
+    /\.\~[a-z0-9]+$/i,                                                 // Vim/Emacs 等編輯器的備份檔案 (.~bk, .~1, .~tmp 等)
     /\.(php|asp|aspx|jsp|cgi|py|rb|pl|sh|bash|exe|dll|so)$/i,          // 可執行檔案
     /(wp-admin|phpmyadmin|servlet|cgi-bin|admin|login|shell|cmd)/i,    // 敏感路徑
     /\.(git|svn|hg|bzr|cvs)/i,                                         // 版本控制目錄
