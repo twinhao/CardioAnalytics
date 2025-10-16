@@ -27,13 +27,14 @@ const CACHE_POLICIES = {
     },
   },
 
-  // HTML 頁面 - 短期快取，需要重新驗證
+  // HTML 頁面 - 完全不快取（安全優先）
   html: {
     pattern: /\.(html?)$|^\/$/i,
     headers: {
-      'Cache-Control': 'public, max-age=3600, must-revalidate',
-      'CDN-Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'CDN-Cache-Control': 'no-store',
       'Pragma': 'no-cache',
+      'Expires': '0',
     },
   },
 
@@ -83,8 +84,8 @@ const SECURITY_HEADERS = {
   // 防止 MIME 類型嗅探（A03: Injection）
   'X-Content-Type-Options': 'nosniff',
 
-  // XSS 防護（舊瀏覽器）
-  'X-XSS-Protection': '1; mode=block',
+  // 移除 X-XSS-Protection（已棄用，改用 CSP）
+  // 'X-XSS-Protection': '1; mode=block',  // 已移除，避免潛在的安全問題
 
   // Referrer 政策（A02: Cryptographic Failures - 防止資訊洩漏）
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -208,11 +209,15 @@ function isValidPath(pathname) {
     /\.\./,                                                              // 路徑遍歷
     /\/\./,                                                              // 隱藏檔案
     /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|orig|save|dist|tar|gz|zip|rar)$/i,  // 備份和壓縮檔案
-    /(-old|-backup|-bak|-orig|-copy|-save|~)$/i,                        // 其他備份檔案命名模式
+    /\.\d{3,}$/,                                                        // 數字副檔名 (.000, .001, etc)
+    /\.(asa|inc|dat|conf|cfg|bck|copy|temp|cache|lock)$/i,            // 其他危險副檔名
+    /(\.-old|-old|-backup|-bak|-orig|-copy|-save|~)$/i,               // 其他備份檔案命名模式
     /\.(php|asp|aspx|jsp|cgi|py|rb|pl|sh|bash|exe|dll|so)$/i,          // 可執行檔案
     /(wp-admin|phpmyadmin|servlet|cgi-bin|admin|login|shell|cmd)/i,    // 敏感路徑
     /\.(git|svn|hg|bzr|cvs)/i,                                         // 版本控制目錄
     /(web\.config|\.htaccess|\.htpasswd|\.user\.ini)/i,                // 伺服器配置檔案
+    /\/actuator\//i,                                                    // Spring Boot Actuator 端點
+    /\/api-docs|\/swagger|\/v2\/api-docs|\/v3\/api-docs/i,            // API 文檔端點
   ];
 
   return !maliciousPatterns.some(pattern => pattern.test(pathname));
@@ -376,6 +381,45 @@ export default {
                        request.headers.get('X-Forwarded-For') ||
                        'unknown';
       const userAgent = request.headers.get('User-Agent') || 'unknown';
+
+      // HTTP Request Smuggling 防護
+      // 拒絕同時包含 Content-Length 和 Transfer-Encoding 的請求
+      const contentLength = request.headers.get('Content-Length');
+      const transferEncoding = request.headers.get('Transfer-Encoding');
+
+      if (contentLength && transferEncoding) {
+        securityLog('security', 'HTTP_SMUGGLING_ATTEMPT', {
+          ip: clientIP,
+          contentLength,
+          transferEncoding,
+          path: pathname,
+        });
+
+        return new Response('Bad Request', {
+          status: 400,
+          headers: {
+            'Content-Type': 'text/plain',
+            ...SECURITY_HEADERS,
+          },
+        });
+      }
+
+      // 驗證 Content-Length 是否為有效數字
+      if (contentLength && (isNaN(parseInt(contentLength)) || parseInt(contentLength) < 0)) {
+        securityLog('security', 'INVALID_CONTENT_LENGTH', {
+          ip: clientIP,
+          contentLength,
+          path: pathname,
+        });
+
+        return new Response('Bad Request', {
+          status: 400,
+          headers: {
+            'Content-Type': 'text/plain',
+            ...SECURITY_HEADERS,
+          },
+        });
+      }
 
       // 立即處理特殊 HTTP 方法
       if (request.method === 'TRACK' || request.method === 'TRACE') {

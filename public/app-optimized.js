@@ -99,11 +99,11 @@ class ECGVisualizer {
                 }
 
                 // 更新記錄數顯示
-                const dataCount = document.getElementById('dataCount');
-                if (dataCount && dataCount.textContent) {
-                    const parts = dataCount.textContent.split('/');
+                const totalElement = document.querySelector('#currentRecord');
+                if (totalElement && totalElement.textContent) {
+                    const parts = totalElement.textContent.split('/');
                     if (parts.length === 2) {
-                        dataCount.textContent = `${parts[0].trim()} / ${this.allECGData.length}`;
+                        totalElement.textContent = `${parts[0].trim()} / ${this.allECGData.length}`;
                     }
                 }
 
@@ -280,12 +280,8 @@ class ECGVisualizer {
     }
 
     finishInitialLoading() {
-        const loading = document.getElementById('loading');
-        if (loading) loading.style.display = 'none';
-
-        const dataCount = document.getElementById('dataCount');
-        if (dataCount) dataCount.textContent = `1 / ${this.allECGData.length}`;
-
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('currentRecord').textContent = `記錄 1 / ${this.allECGData.length}`;
         this.updateInfoPanel();
         this.draw();
     }
@@ -294,36 +290,24 @@ class ECGVisualizer {
         if (this.allECGData.length === 0) return;
 
         const record = this.allECGData[this.currentDataIndex];
-
-        // 更新心率
-        const heartRateEl = document.getElementById('heartRate');
-        if (heartRateEl) heartRateEl.textContent = record.heartRate;
-
-        // 更新診斷
-        const diagnosisEl = document.getElementById('diagnosis');
-        if (diagnosisEl) diagnosisEl.textContent = record.diagnosis;
-
-        // 更新信號品質
-        const qualityEl = document.getElementById('signalQuality');
-        if (qualityEl) qualityEl.textContent = record.quality;
+        document.getElementById('timestamp').textContent = record.timestamp;
+        document.getElementById('heartRate').textContent = `${record.heartRate} bpm`;
+        document.getElementById('diagnosis').textContent = record.diagnosis;
+        document.getElementById('quality').textContent = record.quality;
 
         // 更新診斷顏色
-        if (diagnosisEl) {
-            diagnosisEl.className = '';
-            if (record.diagnosis.includes('過速')) {
-                diagnosisEl.classList.add('warning');
-            } else if (record.diagnosis.includes('過緩') || record.diagnosis.includes('不整')) {
-                diagnosisEl.classList.add('caution');
-            }
+        const diagnosisElement = document.getElementById('diagnosis');
+        diagnosisElement.className = '';
+        if (record.diagnosis.includes('過速')) {
+            diagnosisElement.classList.add('warning');
+        } else if (record.diagnosis.includes('過緩') || record.diagnosis.includes('不整')) {
+            diagnosisElement.classList.add('caution');
         }
     }
 
     bindEvents() {
-        const prevBtn = document.getElementById('prevBtn');
-        const nextBtn = document.getElementById('nextBtn');
-
-        if (prevBtn) prevBtn.addEventListener('click', () => this.previousRecord());
-        if (nextBtn) nextBtn.addEventListener('click', () => this.nextRecord());
+        document.getElementById('prevBtn').addEventListener('click', () => this.previousRecord());
+        document.getElementById('nextBtn').addEventListener('click', () => this.nextRecord());
 
         // 鍵盤事件
         document.addEventListener('keydown', (e) => {
@@ -335,24 +319,13 @@ class ECGVisualizer {
             this.initCanvas();
             this.draw();
         });
-
-        // 振幅調整
-        const amplitudeSlider = document.getElementById('amplitudeSlider');
-        if (amplitudeSlider) {
-            amplitudeSlider.addEventListener('input', (e) => {
-                this.amplitude = parseFloat(e.target.value);
-                const amplitudeValue = document.getElementById('amplitudeValue');
-                if (amplitudeValue) amplitudeValue.textContent = `${this.amplitude.toFixed(1)}x`;
-                this.draw();
-            });
-        }
     }
 
     previousRecord() {
         if (this.currentDataIndex > 0) {
             this.currentDataIndex--;
-            const dataCount = document.getElementById('dataCount');
-            if (dataCount) dataCount.textContent = `${this.currentDataIndex + 1} / ${this.allECGData.length}`;
+            document.getElementById('currentRecord').textContent =
+                `記錄 ${this.currentDataIndex + 1} / ${this.allECGData.length}`;
             this.updateInfoPanel();
             this.draw();
         }
@@ -362,8 +335,8 @@ class ECGVisualizer {
         // 檢查是否需要載入更多數據
         if (this.currentDataIndex < this.allECGData.length - 1) {
             this.currentDataIndex++;
-            const dataCount = document.getElementById('dataCount');
-            if (dataCount) dataCount.textContent = `${this.currentDataIndex + 1} / ${this.allECGData.length}`;
+            document.getElementById('currentRecord').textContent =
+                `記錄 ${this.currentDataIndex + 1} / ${this.allECGData.length}`;
             this.updateInfoPanel();
             this.draw();
 
