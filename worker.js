@@ -203,12 +203,16 @@ function isValidPath(pathname) {
     return true;
   }
 
-  // 阻擋惡意模式
+  // 阻擋惡意模式 - 更完整的備份檔案和敏感路徑檢測
   const maliciousPatterns = [
-    /\.\./,              // 路徑遍歷
-    /\/\./,              // 隱藏檔案
-    /\.(bak|backup|old|tmp|swp|log|sql|db|env|config|ini)/i,
-    /(wp-admin|phpmyadmin|servlet|cgi-bin)/i,
+    /\.\./,                                                              // 路徑遍歷
+    /\/\./,                                                              // 隱藏檔案
+    /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|orig|save|dist|tar|gz|zip|rar)$/i,  // 備份和壓縮檔案
+    /(-old|-backup|-bak|-orig|-copy|-save|~)$/i,                        // 其他備份檔案命名模式
+    /\.(php|asp|aspx|jsp|cgi|py|rb|pl|sh|bash|exe|dll|so)$/i,          // 可執行檔案
+    /(wp-admin|phpmyadmin|servlet|cgi-bin|admin|login|shell|cmd)/i,    // 敏感路徑
+    /\.(git|svn|hg|bzr|cvs)/i,                                         // 版本控制目錄
+    /(web\.config|\.htaccess|\.htpasswd|\.user\.ini)/i,                // 伺服器配置檔案
   ];
 
   return !maliciousPatterns.some(pattern => pattern.test(pathname));
@@ -410,6 +414,13 @@ export default {
           path: pathname,
         });
         return handle404(request, env, ctx);
+      }
+
+      // 特殊處理 favicon.ico - 重定向到 favicon.svg
+      // 瀏覽器會自動請求 favicon.ico，我們重定向到實際存在的 SVG
+      if (pathname === '/favicon.ico') {
+        // 直接重定向到 favicon.svg
+        return Response.redirect(new URL('/favicon.svg', url.origin).toString(), 301);
       }
 
       // 處理根路徑

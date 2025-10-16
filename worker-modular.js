@@ -412,6 +412,40 @@ export default {
         return handle404(request, env, ctx);
       }
 
+      // 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
+      // 瀏覽器會自動請求 favicon.ico，我們優雅地處理這個情況
+      if (pathname === '/favicon.ico') {
+        try {
+          const faviconRequest = new Request(
+            new URL('/favicon.svg', url.origin).toString(),
+            request
+          );
+
+          const response = await getAssetFromKV(
+            {
+              request: faviconRequest,
+              waitUntil: ctx.waitUntil.bind(ctx),
+            },
+            {
+              ASSET_NAMESPACE: env.__STATIC_CONTENT,
+              ASSET_MANIFEST: getAssetManifest(env),
+            }
+          );
+
+          // 返回 SVG 作為 favicon
+          return createSecureResponse(response.body, {
+            pathname: '/favicon.ico',
+            contentType: 'image/svg+xml',
+          });
+        } catch {
+          // 如果連 favicon.svg 也不存在，返回 204 No Content
+          return new Response(null, {
+            status: 204,
+            headers: SECURITY_HEADERS,
+          });
+        }
+      }
+
       // 處理根路徑
       let assetPath = pathname;
       if (assetPath === '/') {
