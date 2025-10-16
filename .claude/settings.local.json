@@ -21,7 +21,12 @@
       "Bash(git commit -m \"$(cat <<''EOF''\n修復：攔截雙重副檔名備份檔案\n\n問題：\n- /global.asa.backup 返回 500（未被攔截）\n- 原因：正則表達式只檢查結尾副檔名\n\n解決方案：\n✅ 移除正則表達式中的 $ 結尾符號\n✅ 改為匹配路徑中「任何位置」的敏感關鍵字\n✅ 添加 .backup 和 .asa 到可疑模式\n\n現在可以攔截：\n- 單層副檔名：/file.bak, /file.old\n- 雙層副檔名：/file.asa.backup, /file.php.bak\n- 多層副檔名：/file.conf.backup.old\n\n測試驗證：\n✅ /global.asa.backup → 404\n✅ /global.bak → 404  \n✅ /app.js → 200 (正常)\n✅ / → 200 (正常)\n\n優點：\n這就是模式匹配的威力！一個小改動就能\n攔截無限多種備份檔案變體，不需要窮舉。\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(npx wrangler:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\n修復 DAST 發現的快取安全漏洞\n\n問題：\n✅ Low: 修正 TRACK 方法錯誤處理（返回 405 而非 501）\n✅ Low: 降低 CORS Max-Age 至 1800 秒（30 分鐘）\n✅ Low: 確認首頁 Cache-Control 使用 no-store\n✅ Low: 確認 HSTS max-age 為 12 個月\n⚠️  High: 弱 SSL 加密套件需在 Cloudflare Dashboard 設定\n\n安全改進：\n- 對不允許的 HTTP 方法返回簡潔的 405 錯誤\n- CORS 預檢緩存時間符合安全建議（≤30 分鐘）\n- 所有 HTML 頁面強制 no-store 防止敏感資料緩存\n- HSTS 設置 12 個月過期時間\n\n參考：OpenText DAST 掃描報告 (2025-10-15)\n- CWE-550: Information Exposure Through Server Error Message\n- CWE-525: Information Exposure Through Browser Caching\n- CWE-319: Cleartext Transmission of Sensitive Information\n- CWE-326/327: Inadequate Encryption Strength\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(for file in \"/global.backup\" \"/config.old\" \"/test.tmp\" \"/admin.sql\" \"/.env\" \"/wp-admin\" \"/phpmyadmin\")",
+      "Bash(do echo \"Testing $file:\")",
+      "Bash(done)",
+      "Bash(for i in {1..10})",
+      "Bash(do curl -s -o /dev/null -w \"Request $i: %{http_code}\\n\" https://cardioanalytics.twinhao.com/global.bak)"
     ],
     "deny": [],
     "ask": []

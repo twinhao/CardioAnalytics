@@ -8,26 +8,13 @@
  * 2. 強制 HTTPS（A02: Cryptographic Failures）
  * 3. 完整安全標頭（A05: Security Misconfiguration）
  * 4. 白名單存取控制（A01: Broken Access Control）
- * 5. 速率限制（A04: Insecure Design）
- * 6. 安全日誌與監控（A09: Logging and Monitoring）
- * 7. SSRF 防護（A10: Server-Side Request Forgery）
- * 8. XSS 防護（A03: Injection）
- * 9. 禁止快取敏感內容（A05: Security Misconfiguration）
+ * 5. 安全日誌與監控（A09: Logging and Monitoring）
+ * 6. SSRF 防護（A10: Server-Side Request Forgery）
+ * 7. XSS 防護（A03: Injection）
+ * 8. 禁止快取敏感內容（A05: Security Misconfiguration）
  */
 
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
-
-// ==================== 速率限制配置 ====================
-// A04: Insecure Design - 防止濫用和 DoS 攻擊
-const RATE_LIMIT = {
-  maxRequests: 100,        // 每個時間窗口最多請求數
-  windowMs: 60000,         // 時間窗口（毫秒）= 1 分鐘
-  blockDuration: 300000,   // 封鎖時長（毫秒）= 5 分鐘
-};
-
-// 儲存 IP 請求記錄的 Map（在 Worker 記憶體中）
-const requestCounts = new Map();
-const blockedIPs = new Map();
 
 /**
  * 安全地解析 Asset Manifest
@@ -39,61 +26,6 @@ function getAssetManifest(env) {
     console.error('Failed to parse asset manifest:', e);
     return {};
   }
-}
-
-// ==================== 速率限制函式 ====================
-/**
- * 檢查 IP 是否超過速率限制
- * A04: Insecure Design - 防止暴力破解和 DoS
- *
- * @param {string} ip - 客戶端 IP
- * @returns {boolean} - true 表示允許，false 表示被封鎖
- */
-function checkRateLimit(ip) {
-  const now = Date.now();
-
-  // 檢查 IP 是否在封鎖清單中
-  if (blockedIPs.has(ip)) {
-    const blockInfo = blockedIPs.get(ip);
-    if (now - blockInfo.blockedAt < RATE_LIMIT.blockDuration) {
-      // 仍在封鎖期間
-      return false;
-    } else {
-      // 封鎖期已過，移除封鎖
-      blockedIPs.delete(ip);
-      requestCounts.delete(ip);
-    }
-  }
-
-  // 取得或建立請求記錄
-  const requestInfo = requestCounts.get(ip) || {
-    count: 0,
-    windowStart: now,
-  };
-
-  // 檢查時間窗口是否已過期
-  if (now - requestInfo.windowStart > RATE_LIMIT.windowMs) {
-    // 重置計數器
-    requestInfo.count = 1;
-    requestInfo.windowStart = now;
-  } else {
-    // 增加計數
-    requestInfo.count++;
-  }
-
-  // 更新記錄
-  requestCounts.set(ip, requestInfo);
-
-  // 檢查是否超過限制
-  if (requestInfo.count > RATE_LIMIT.maxRequests) {
-    blockedIPs.set(ip, {
-      blockedAt: now,
-      reason: 'Rate limit exceeded',
-    });
-    return false;
-  }
-
-  return true;
 }
 
 // ==================== 安全日誌函式 ====================
@@ -197,6 +129,12 @@ const ALLOWED_FILES = new Set([
  * @returns {boolean} - true 表示允許，false 表示阻擋
  */
 function isValidPath(pathname) {
+  // 防止目錄列出：拒絕所有以斜線結尾的路徑（除了根路徑）
+  // 這防止了類似 /index/ 或 /app.js/ 的目錄遍歷嘗試
+  if (pathname !== '/' && pathname.endsWith('/')) {
+    return false;
+  }
+
   // 直接檢查白名單
   if (ALLOWED_FILES.has(pathname)) {
     return true;
@@ -276,12 +214,11 @@ function addSecurityHeaders(response) {
 export default {
   async fetch(request, env, ctx) {
     const startTime = Date.now();
-    let statusCode = 200;
 
     try {
       const url = new URL(request.url);
 
-      // 0. 取得客戶端 IP（用於速率限制和日誌）
+      // 0. 取得客戶端 IP（用於日誌）
       const clientIP = request.headers.get('CF-Connecting-IP') ||
                        request.headers.get('X-Forwarded-For') ||
                        'unknown';
@@ -291,26 +228,43 @@ export default {
       const referer = request.headers.get('Referer');
       const userAgent = request.headers.get('User-Agent') || 'unknown';
 
-      // 1. 速率限制檢查（A04: Insecure Design）
-      if (!checkRateLimit(clientIP)) {
-        statusCode = 429;
-        securityLog('security', 'RATE_LIMIT_EXCEEDED', {
+      // 0.5 立即處理特殊情況，避免 Cloudflare 預設行為
+
+      // 攔截 TRACK/TRACE 方法
+      if (request.method === 'TRACK' || request.method === 'TRACE') {
+        securityLog('warn', 'DANGEROUS_METHOD_BLOCKED', {
           ip: clientIP,
+          method: request.method,
           path: url.pathname,
           userAgent,
         });
 
-        return new Response('Too Many Requests', {
-          status: 429,
+        return new Response('Method Not Allowed', {
+          status: 405,
           headers: {
+            'Allow': 'GET, HEAD, OPTIONS',
             'Content-Type': 'text/plain',
-            'Retry-After': Math.ceil(RATE_LIMIT.blockDuration / 1000).toString(),
             ...SECURITY_HEADERS,
           },
         });
       }
 
-      // 2. 針對 HTML 請求，強制 Cloudflare 不使用快取
+      // 防止目錄列出：立即拒絕以斜線結尾的路徑（除了根路徑）
+      // Cloudflare 可能會自動重定向 /index/ 到 /index，我們要阻止這種行為
+      if (url.pathname !== '/' && url.pathname.endsWith('/')) {
+        securityLog('warn', 'DIRECTORY_TRAVERSAL_BLOCKED', {
+          ip: clientIP,
+          path: url.pathname,
+          userAgent,
+        });
+
+        return new Response(null, {
+          status: 404,
+          headers: SECURITY_HEADERS,
+        });
+      }
+
+      // 1. 針對 HTML 請求，強制 Cloudflare 不使用快取
       // 這是關鍵：確保 Worker 總是被執行，而不是從快取返回
       const isHtmlRequest = url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname === '/index.html';
       if (isHtmlRequest) {
@@ -339,7 +293,7 @@ export default {
         });
       }
 
-      // 3. 強制 HTTPS（A02: Cryptographic Failures）
+      // 2. 強制 HTTPS（A02: Cryptographic Failures）
       if (url.protocol === 'http:') {
         url.protocol = 'https:';
         securityLog('info', 'HTTPS_REDIRECT', {
@@ -349,9 +303,8 @@ export default {
         return Response.redirect(url.toString(), 301);
       }
 
-      // 4. 路徑驗證：使用白名單檢查（A01: Broken Access Control）
+      // 3. 路徑驗證：使用白名單檢查（A01: Broken Access Control）
       if (!isValidPath(url.pathname)) {
-        statusCode = 404;
         securityLog('warn', 'INVALID_PATH_BLOCKED', {
           ip: clientIP,
           path: url.pathname,
@@ -366,7 +319,7 @@ export default {
         });
       }
 
-      // 5. 處理 OPTIONS 預檢請求（CORS）
+      // 4. 處理 OPTIONS 預檢請求（CORS）
       if (request.method === 'OPTIONS') {
         return new Response(null, {
           status: 204,
@@ -379,9 +332,10 @@ export default {
         });
       }
 
-      // 6. 只允許 GET 和 HEAD 方法（A01: Broken Access Control）
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
-        statusCode = 405;
+      // 5. 只允許 GET 和 HEAD 方法（A01: Broken Access Control）
+      // 明確處理所有方法，避免預設行為洩漏資訊
+      const allowedMethods = ['GET', 'HEAD', 'OPTIONS'];
+      if (!allowedMethods.includes(request.method)) {
         securityLog('warn', 'METHOD_NOT_ALLOWED', {
           ip: clientIP,
           method: request.method,
@@ -389,16 +343,19 @@ export default {
           userAgent,
         });
 
-        return new Response(null, {
+        // 總是返回 405 Method Not Allowed，避免洩漏伺服器資訊
+        // 不返回 501 Not Implemented，因為這會暴露伺服器實作細節
+        return new Response('Method Not Allowed', {
           status: 405,
           headers: {
             'Allow': 'GET, HEAD, OPTIONS',
+            'Content-Type': 'text/plain',
             ...SECURITY_HEADERS,
           },
         });
       }
 
-      // 5. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
+      // 6. 特殊處理 favicon.ico - 如果不存在，返回 204 而不是錯誤
       if (url.pathname === '/favicon.ico') {
         try {
           const faviconResponse = await getAssetFromKV(
@@ -421,7 +378,7 @@ export default {
         }
       }
 
-      // 6. 嘗試從 KV 獲取靜態資源
+      // 7. 嘗試從 KV 獲取靜態資源
       let response;
 
       // 在呼叫 getAssetFromKV 之前，先建立映射後的 URL
@@ -453,7 +410,7 @@ export default {
           }
         );
       } catch (e) {
-        // 7. 如果找不到資源，返回 404
+        // 8. 如果找不到資源，返回 404
         if (e.status === 404 || e.message.includes('could not find')) {
           try {
             // 嘗試載入自訂 404 頁面
@@ -484,7 +441,7 @@ export default {
             });
           }
         } else if (e.status >= 500) {
-          // 8. 伺服器錯誤，返回自訂 500 頁面
+          // 9. 伺服器錯誤，返回自訂 500 頁面
           try {
             const errorRequest = new Request(
               new URL('/500.html', request.url).toString(),
@@ -517,14 +474,14 @@ export default {
         }
       }
 
-      // 9. 建立新的 Response 以完全控制標頭
+      // 10. 建立新的 Response 以完全控制標頭
       const newResponse = new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
         headers: new Headers(),  // 從空標頭開始
       });
 
-      // 10. 先添加安全標頭
+      // 11. 先添加安全標頭
       Object.entries(SECURITY_HEADERS).forEach(([key, value]) => {
         if (key === 'Server' && value === '') {
           // 如果 Server 標頭設為空值，則刪除它
@@ -534,7 +491,7 @@ export default {
         }
       });
 
-      // 11. 根據檔案類型設置快取標頭
+      // 12. 根據檔案類型設置快取標頭
       const isHtml = url.pathname.endsWith('.html') || url.pathname === '/';
 
       if (isHtml) {
@@ -562,13 +519,13 @@ export default {
         });
       }
 
-      // 12. 保留必要的 Content-Type
+      // 13. 保留必要的 Content-Type
       const contentType = response.headers.get('Content-Type');
       if (contentType) {
         newResponse.headers.set('Content-Type', contentType);
       }
 
-      // 13. 記錄成功的請求（A09: Logging and Monitoring）
+      // 14. 記錄成功的請求（A09: Logging and Monitoring）
       const duration = Date.now() - startTime;
       securityLog('info', 'REQUEST_SUCCESS', {
         ip: clientIP,
@@ -582,7 +539,7 @@ export default {
       return newResponse;
 
     } catch (error) {
-      // 14. 全域錯誤處理（A09: Logging and Monitoring）
+      // 15. 全域錯誤處理（A09: Logging and Monitoring）
       const duration = Date.now() - startTime;
 
       securityLog('error', 'WORKER_ERROR', {
