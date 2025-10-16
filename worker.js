@@ -115,18 +115,19 @@ const SECURITY_HEADERS = {
 };
 
 /**
- * 允許的檔案白名單
+ * 允許的檔案白名單（嚴格模式）
+ * 只有在此清單中的路徑才會被允許存取
+ * 其他所有路徑一律返回 404
  */
 const ALLOWED_FILES = new Set([
-  '/',
-  '/index.html',
-  '/404.html',
-  '/500.html',
-  '/app.js',
-  '/styles.css',
-  '/favicon.svg',
-  '/favicon.ico',
-  '/robots.txt',
+  '/',              // 根路徑（重定向到 index.html）
+  '/index.html',    // 首頁
+  '/styles.css',    // 樣式檔
+  '/app.js',        // JavaScript 檔
+  '/favicon.svg',   // 網站圖示
+  '/favicon.ico',   // 備用圖示（瀏覽器會自動請求）
+  '/404.html',      // 404 錯誤頁面
+  '/500.html',      // 500 錯誤頁面
 ]);
 
 // ==================== 工具函式模組 ====================
@@ -191,7 +192,8 @@ function getCachePolicy(pathname) {
 }
 
 /**
- * 路徑驗證
+ * 路徑驗證 - 白名單模式
+ * 只允許白名單中的路徑，其他一律拒絕
  */
 function isValidPath(pathname) {
   // 防止目錄列出
@@ -199,29 +201,8 @@ function isValidPath(pathname) {
     return false;
   }
 
-  // 檢查白名單
-  if (ALLOWED_FILES.has(pathname)) {
-    return true;
-  }
-
-  // 阻擋惡意模式 - 更完整的備份檔案和敏感路徑檢測
-  const maliciousPatterns = [
-    /\.\./,                                                              // 路徑遍歷
-    /\/\./,                                                              // 隱藏檔案
-    /\.(bak|backup|bac|old|tmp|swp|log|sql|db|env|config|ini|orig|save|dist|tar|gz|zip|rar)$/i,  // 備份和壓縮檔案
-    /\.\d{3,}$/,                                                        // 數字副檔名 (.000, .001, etc)
-    /\.(asa|inc|dat|conf|cfg|bck|copy|temp|cache|lock)$/i,            // 其他危險副檔名
-    /(\.-old|-old|-backup|-bak|-orig|-copy|-save|~)$/i,               // 其他備份檔案命名模式
-    /\.\~[a-z0-9]+$/i,                                                 // Vim/Emacs 等編輯器的備份檔案 (.~bk, .~1, .~tmp 等)
-    /\.(php|asp|aspx|jsp|cgi|py|rb|pl|sh|bash|exe|dll|so)$/i,          // 可執行檔案
-    /(wp-admin|phpmyadmin|servlet|cgi-bin|admin|login|shell|cmd)/i,    // 敏感路徑
-    /\.(git|svn|hg|bzr|cvs)/i,                                         // 版本控制目錄
-    /(web\.config|\.htaccess|\.htpasswd|\.user\.ini)/i,                // 伺服器配置檔案
-    /\/actuator\//i,                                                    // Spring Boot Actuator 端點
-    /\/api-docs|\/swagger|\/v2\/api-docs|\/v3\/api-docs/i,            // API 文檔端點
-  ];
-
-  return !maliciousPatterns.some(pattern => pattern.test(pathname));
+  // 嚴格白名單檢查 - 只允許白名單中的路徑
+  return ALLOWED_FILES.has(pathname);
 }
 
 /**
@@ -379,8 +360,8 @@ export default {
 
       // 取得客戶端資訊
       const clientIP = request.headers.get('CF-Connecting-IP') ||
-                       request.headers.get('X-Forwarded-For') ||
-                       'unknown';
+        request.headers.get('X-Forwarded-For') ||
+        'unknown';
       const userAgent = request.headers.get('User-Agent') || 'unknown';
 
       // HTTP Request Smuggling 防護
